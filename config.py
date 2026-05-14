@@ -10,17 +10,21 @@ QWEN_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 QWEN_MODEL = "qwen-plus"  # 可换 qwen-max / qwen-turbo
 
 OPENAI_API_KEY = "your_openai_api_key_here"
-OPENAI_IMAGE_MODEL = "dall-e-3"
-OPENAI_IMAGE_SIZE = "1024x1024"
-OPENAI_IMAGE_QUALITY = "hd"
 
-JIMENG_API_KEY = "your_jimeng_api_key_here"     # 即梦AI API Key
-JIMENG_API_SECRET = "your_jimeng_api_secret_here"  # 即梦AI API Secret
+JIMENG_API_KEY = "your_jimeng_api_key_here"     # 即梦AI / 火山引擎 API Key
+JIMENG_API_SECRET = "your_jimeng_api_secret_here"  # 即梦AI / 火山引擎 API Secret
 
 # ============================================================
-# 即梦 AI 接口配置
+# 即梦 / 火山引擎视觉 API 配置
 # ============================================================
 JIMENG_BASE_URL = "https://visual.volcengineapi.com"
+
+# 智能绘图（文生图）参数
+JIMENG_IMAGE_MODEL = "high_aes_general_v21"   # 火山引擎智能绘图v2.1
+JIMENG_IMAGE_WIDTH = 1024
+JIMENG_IMAGE_HEIGHT = 1024
+
+# 视频生成参数
 JIMENG_VIDEO_MODEL = "high_aes_general_v30l_zt2i"   # 视频生成3.0 1080P
 
 # 视频生成参数
