@@ -1,6 +1,6 @@
 """
 节点3：Model Generator
-输入人物特征提示词 → 调用火山引擎（智能绘图）API 生图 → 下载/保存图片
+输入人物特征提示词 → 调用火山引擎即梦 文生图 3.0 API 生图 → 下载/保存图片
 """
 
 import os
@@ -84,15 +84,20 @@ def run(feature_prompt: str, output_dir: str = None) -> dict:
 
     full_prompt = _build_full_prompt(feature_prompt)
 
-    print("[Model Generator] 正在调用火山引擎智能绘图 API 生成人物图片...")
+    print("[Model Generator] 正在调用即梦 文生图 3.0 API 生成人物图片...")
     print(f"[Model Generator] Prompt 预览: {full_prompt[:120]}...")
 
     payload = {
-        "req_key": config.JIMENG_IMAGE_MODEL,
+        "req_key": config.JIMENG_IMAGE_MODEL,          # high_aes_general_v30l
         "prompt": full_prompt,
         "negative_prompt": NEGATIVE_STYLE_SUFFIX,
         "width": config.JIMENG_IMAGE_WIDTH,
         "height": config.JIMENG_IMAGE_HEIGHT,
+        "scale": config.JIMENG_IMAGE_SCALE,             # CFG 引导强度
+        "ddim_steps": config.JIMENG_IMAGE_STEPS,        # 推理步数
+        "use_pre_llm": config.JIMENG_IMAGE_USE_LLM,     # 大模型优化 Prompt
+        "return_url": config.JIMENG_IMAGE_RETURN_URL,   # True=返回URL
+        "seed": -1,                                      # -1 随机
     }
     body = json.dumps(payload)
 
