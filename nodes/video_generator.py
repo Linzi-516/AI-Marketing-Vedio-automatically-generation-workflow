@@ -1,6 +1,11 @@
 """
 节点5：Video Generator
-输入人物图片 + 分镜脚本 → 调用即梦AI 3.0 图生视频 → 下载视频片段
+输入人物图片 + 分镜脚本 → 调用即梦AI 3.0 图生视频（首帧）→ 下载视频片段
+
+接口文档：即梦AI-视频生成3.0 1080P-图生视频-首帧
+  提交：POST https://visual.volcengineapi.com?Action=CVSync2AsyncSubmitTask&Version=2022-08-31
+  查询：POST https://visual.volcengineapi.com?Action=CVSync2AsyncGetResult&Version=2022-08-31
+  req_key：jimeng_i2v_first_v30_1080
 """
 
 import os
@@ -9,6 +14,7 @@ import json
 import hmac
 import hashlib
 import datetime
+import base64
 import requests
 import config
 
@@ -26,8 +32,8 @@ VIDEO_PROMPT_PREFIX = (
 
 def _sign_request(method: str, path: str, params: dict, body: str, ak: str, sk: str) -> dict:
     """
-    火山引擎 API 签名（即梦AI使用火山引擎SDK）
-    参考：https://www.volcengine.com/docs/6369/65
+    火山引擎 API 签名
+    Region: cn-north-1，Service: cv
     """
     now = datetime.datetime.utcnow()
     date_str = now.strftime("%Y%m%d")
@@ -36,7 +42,6 @@ def _sign_request(method: str, path: str, params: dict, body: str, ak: str, sk: 
     service = "cv"
     region = "cn-north-1"
 
-    # canonical request
     canonical_uri = path
     canonical_querystring = "&".join(
         f"{k}={v}" for k, v in sorted(params.items())
@@ -61,7 +66,6 @@ def _sign_request(method: str, path: str, params: dict, body: str, ak: str, sk: 
         body_hash,
     ])
 
-    # string to sign
     credential_scope = f"{date_str}/{region}/{service}/request"
     string_to_sign = "\n".join([
         "HMAC-SHA256",
@@ -70,10 +74,11 @@ def _sign_request(method: str, path: str, params: dict, body: str, ak: str, sk: 
         hashlib.sha256(canonical_request.encode()).hexdigest(),
     ])
 
-    # signing key
     def _hmac(key, msg):
-        return hmac.new(key if isinstance(key, bytes) else key.encode(),
-                        msg.encode(), hashlib.sha256).digest()
+        return hmac.new(
+            key if isinstance(key, bytes) else key.encode(),
+            msg.encode(), hashlib.sha256
+        ).digest()
 
     signing_key = _hmac(_hmac(_hmac(_hmac(sk, date_str), region), service), "request")
     signature = hmac.new(signing_key, string_to_sign.encode(), hashlib.sha256).hexdigest()
@@ -84,104 +89,119 @@ def _sign_request(method: str, path: str, params: dict, body: str, ak: str, sk: 
         f"Signature={signature}"
     )
 
-    return {
-        **headers,
-        "Authorization": authorization,
-    }
+    return {**headers, "Authorization": authorization}
 
 
 def _image_to_base64(image_path: str) -> str:
-    import base64
     with open(image_path, "rb") as f:
         return base64.b64encode(f.read()).decode()
 
 
-def _submit_video_task(image_path: str, scene: dict) -> str:
+def _submit_task(image_path: str, scene: dict) -> str:
     """
-    提交即梦 AI 图生视频任务，返回 task_id
+    提交图生视频任务，返回 task_id
+    Action: CVSync2AsyncSubmitTask
     """
     duration = max(config.SCENE_MIN_DURATION, min(scene["duration"], config.SCENE_MAX_DURATION))
+    # frames: 5s=121, 10s=241（仅支持这两个值）
+    frames = 121 if duration <= 5 else 241
+
     script_text = scene.get("script", "")
     visual_note = scene.get("visual_note", "")
-
-    # 组合视频 prompt
     video_prompt = VIDEO_PROMPT_PREFIX + f"dialogue: \"{script_text}\", {visual_note}"
 
     image_b64 = _image_to_base64(image_path)
 
     payload = {
         "req_key": config.JIMENG_VIDEO_MODEL,
-        "prompt": video_prompt,
-        "image_urls": [],
         "binary_data_base64": [image_b64],
-        "duration": duration,
-        "width": config.JIMENG_VIDEO_WIDTH,
-        "height": config.JIMENG_VIDEO_HEIGHT,
+        "prompt": video_prompt,
+        "seed": -1,
+        "frames": frames,
     }
     body = json.dumps(payload)
 
-    path = "/"
-    params = {
-        "Action": "CVProcess",
-        "Version": "2022-08-31",
-    }
-
+    params = {"Action": "CVSync2AsyncSubmitTask", "Version": "2022-08-31"}
     headers = _sign_request(
-        "POST", path, params, body,
+        "POST", "/", params, body,
         config.JIMENG_API_KEY, config.JIMENG_API_SECRET
     )
-
-    url = config.JIMENG_BASE_URL
     query = "&".join(f"{k}={v}" for k, v in params.items())
-    resp = requests.post(f"{url}?{query}", headers=headers, data=body, timeout=30)
+    resp = requests.post(
+        f"{config.JIMENG_BASE_URL}?{query}",
+        headers=headers, data=body, timeout=60
+    )
     resp.raise_for_status()
     result = resp.json()
 
     if result.get("code") != 10000:
-        raise RuntimeError(f"即梦AI提交失败: {result}")
+        raise RuntimeError(f"即梦AI提交失败: code={result.get('code')} msg={result.get('message')}")
 
     task_id = result["data"]["task_id"]
+    print(f"[Video Generator] 任务已提交 task_id={task_id}")
     return task_id
 
 
-def _poll_video_task(task_id: str, max_wait: int = 300) -> str:
+def _poll_task(task_id: str, max_wait: int = 600) -> str:
     """
-    轮询即梦AI任务状态，返回视频 URL
+    轮询任务状态，返回视频 URL
+    Action: CVSync2AsyncGetResult
+    status: in_queue / generating / done / not_found / expired
     """
-    path = "/"
-    params = {
-        "Action": "CVProcess",
-        "Version": "2022-08-31",
+    payload = {
+        "req_key": config.JIMENG_VIDEO_MODEL,
+        "task_id": task_id,
     }
-
-    payload = {"task_id": task_id}
     body = json.dumps(payload)
+    params = {"Action": "CVSync2AsyncGetResult", "Version": "2022-08-31"}
 
     start = time.time()
+    interval = 10  # 每10秒轮询一次
+    time.sleep(5)  # 提交后稍等再开始轮询
+
     while time.time() - start < max_wait:
-        headers = _sign_request(
-            "GET", path, params, "",
-            config.JIMENG_API_KEY, config.JIMENG_API_SECRET
-        )
-        query = "&".join(f"{k}={v}" for k, v in params.items())
-        resp = requests.get(
-            f"{config.JIMENG_BASE_URL}?{query}&task_id={task_id}",
-            headers=headers,
-            timeout=30
-        )
-        resp.raise_for_status()
+        # 带重试的轮询请求（网络抖动时重试3次）
+        last_err = None
+        for attempt in range(3):
+            try:
+                headers = _sign_request(
+                    "POST", "/", params, body,
+                    config.JIMENG_API_KEY, config.JIMENG_API_SECRET
+                )
+                query = "&".join(f"{k}={v}" for k, v in params.items())
+                resp = requests.post(
+                    f"{config.JIMENG_BASE_URL}?{query}",
+                    headers=headers, data=body, timeout=30
+                )
+                resp.raise_for_status()
+                last_err = None
+                break
+            except Exception as e:
+                last_err = e
+                time.sleep(3)
+        if last_err:
+            raise last_err
         result = resp.json()
 
-        status = result.get("data", {}).get("status")
+        if result.get("code") != 10000:
+            raise RuntimeError(f"即梦AI查询失败: code={result.get('code')} msg={result.get('message')}")
+
+        data = result.get("data", {})
+        status = data.get("status", "")
+
         if status == "done":
-            return result["data"]["videos"][0]["url"]
-        elif status in ("failed", "error"):
-            raise RuntimeError(f"即梦AI视频生成失败: {result}")
+            video_url = data.get("video_url", "")
+            if not video_url:
+                raise RuntimeError("任务完成但 video_url 为空")
+            return video_url
+        elif status in ("not_found", "expired"):
+            raise RuntimeError(f"任务异常，status={status}")
+        else:
+            elapsed = int(time.time() - start)
+            print(f"[Video Generator] 等待中 status={status} 已等待{elapsed}s task_id={task_id[:8]}...")
+            time.sleep(interval)
 
-        print(f"[Video Generator] 等待视频生成（task_id={task_id[:8]}...）状态: {status}")
-        time.sleep(5)
-
-    raise TimeoutError(f"即梦AI任务超时（{max_wait}s）: {task_id}")
+    raise TimeoutError(f"视频生成超时（{max_wait}s），task_id={task_id}")
 
 
 def _download_video(url: str, save_path: str) -> bool:
@@ -227,25 +247,28 @@ def run(image_paths: list, scenes: list, output_dir: str = None) -> dict:
 
     for i, scene in enumerate(scenes):
         scene_id = scene.get("scene_id", i + 1)
-        # 循环使用图片（多张图片轮流）
         image_path = image_paths[i % len(image_paths)]
 
         print(f"[Video Generator] 处理分镜 {scene_id}/{len(scenes)}：{scene.get('script', '')[:30]}...")
 
         try:
-            task_id = _submit_video_task(image_path, scene)
-            print(f"[Video Generator] 分镜 {scene_id} 已提交，task_id={task_id[:8]}...")
+            # 1. 提交任务
+            task_id = _submit_task(image_path, scene)
 
-            video_url = _poll_video_task(task_id)
-            video_urls.append(video_url)
+            # 2. 轮询结果
+            print(f"[Video Generator] 等待视频生成（最长10分钟）...")
+            video_url = _poll_task(task_id)
 
+            # 3. 下载视频
             filename = f"scene_{scene_id:03d}_{int(time.time())}.mp4"
             save_path = os.path.join(output_dir, filename)
+
             if _download_video(video_url, save_path):
                 video_paths.append(save_path)
+                video_urls.append(video_url)
                 print(f"[Video Generator] 分镜 {scene_id} 视频已保存: {save_path}")
             else:
-                video_paths.append(None)
+                raise RuntimeError("视频下载失败")
 
         except Exception as e:
             print(f"[Video Generator] 分镜 {scene_id} 生成失败: {e}")
