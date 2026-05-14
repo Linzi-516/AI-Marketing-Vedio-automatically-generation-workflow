@@ -10,11 +10,11 @@ import workflow
 # 在此填入你的产品信息
 # ============================================================
 PRODUCT_INPUT = {
-    "product_name": "XX助眠软糖",                         # 产品名称
-    "product_offer": "含植物提取成分，睡前嚼1粒，30分钟帮助入睡，无依赖感",  # 功能/Offer
-    "target_audience": "25-40岁上班族，长期睡眠质量差",         # 目标受众
-    "pain_points": "压力大难以入睡、睡前刷手机停不下来、白天犯困精神不好",  # 核心痛点
-    "total_duration": 30,                                  # 视频总时长（秒）
+    "product_name": "微证券小程序",                         # 产品名称
+    "product_offer": "工作盯盘、微信提醒、免下App等",  # 功能/Offer
+    "target_audience": "25-40岁上班族",         # 目标受众
+    "pain_points": "上班开会用炒股App太显眼，容易错过关键行情等",  # 核心痛点
+    "total_duration": 25,                                  # 视频总时长（秒）
 }
 
 
