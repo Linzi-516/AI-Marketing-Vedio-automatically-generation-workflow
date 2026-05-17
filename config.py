@@ -101,9 +101,9 @@ JIMENG_MODELCARD_STEPS = 30     # 推理步数（图生图可适当多一些）
 # 灰底人物姿势参考图（共3张，用于生成模特模卡图）
 # 请将3张灰底姿势剪影图的绝对路径填入下方列表
 MODELCARD_SILHOUETTE_PATHS = [
-    r"C:\Users\37456\Desktop\研一下课程\6031ai市场营销\期中报告\正面剪影.png",   # 姿势1（如站姿正面）
-    r"C:\Users\37456\Desktop\研一下课程\6031ai市场营销\期中报告\侧面剪影.png",   # 姿势2（如站姿侧面）
-    r"C:\Users\37456\Desktop\研一下课程\6031ai市场营销\期中报告\正面带姿势剪影.png",   # 姿势3（如行走姿势）
+    r"灰底姿势剪影图的绝对路径1",   # 姿势1（如站姿正面）
+    r"灰底姿势剪影图的绝对路径2",   # 姿势2（如站姿侧面）
+    r"灰底姿势剪影图的绝对路径3",   # 姿势3（如行走姿势）
 ]
 
 # 视频生成参数
@@ -187,4 +187,4 @@ def audio_uploader(local_path: str) -> str:
 IMAGE_COUNT = 1
 
 # 输出目录
-OUTPUT_DIR = r"D:\6031ouput"
+OUTPUT_DIR = r"在此输入存储路径"
