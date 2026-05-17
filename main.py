@@ -19,7 +19,7 @@ PRODUCT_INPUT = {
 
 
 if __name__ == "__main__":
-    result = workflow.run(**PRODUCT_INPUT)
+    result = workflow.run(**PRODUCT_INPUT, run_id="20260517_022956")
 
     print("\n--- 完整脚本预览 ---")
     print(result.get("full_script", "（脚本未生成）"))
