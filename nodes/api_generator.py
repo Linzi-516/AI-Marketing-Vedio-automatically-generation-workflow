@@ -1,11 +1,11 @@
 """
-节点5：Video Generator
-输入人物图片 + 分镜脚本 → 调用即梦AI 3.0 图生视频（首帧）→ 下载视频片段
+节点5-A：API Video Generator（火山引擎版）
+输入人物图片（首尾帧相同）+ 分镜脚本 → 调用即梦AI 3.0 图生视频（首尾帧）→ 下载视频片段
 
-接口文档：即梦AI-视频生成3.0 1080P-图生视频-首帧
+接口文档：即梦AI-视频生成3.0 1080P-图生视频-首尾帧
   提交：POST https://visual.volcengineapi.com?Action=CVSync2AsyncSubmitTask&Version=2022-08-31
   查询：POST https://visual.volcengineapi.com?Action=CVSync2AsyncGetResult&Version=2022-08-31
-  req_key：jimeng_i2v_first_v30_1080
+  req_key：jimeng_i2v_firstlast_v30_1080
 """
 
 import os
@@ -17,17 +17,6 @@ import datetime
 import base64
 import requests
 import config
-
-
-# 固定口播视频提示词前缀
-VIDEO_PROMPT_PREFIX = (
-    "single person talking-head video, fixed camera angle, "
-    "no app screen or product display, "
-    "natural facial expressions, subtle gestures only, "
-    "stable consistent character appearance throughout, "
-    "no subtitles, no logo, no text overlay, "
-    "clean background, cinematic portrait style, "
-)
 
 
 def _sign_request(method: str, path: str, params: dict, body: str, ak: str, sk: str) -> dict:
@@ -97,9 +86,19 @@ def _image_to_base64(image_path: str) -> str:
         return base64.b64encode(f.read()).decode()
 
 
+def _build_video_prompt(script_text: str) -> str:
+    """构建统一的口播视频提示词（首尾帧策略，全程固定镜头）"""
+    return (
+        f"制作该人物的单人口播视频，要求整体镜头保持不变，不随意变动，"
+        f"不要呈现具体的app内容和任何logo，字幕，只需呈现人物画面，"
+        f"人物表情自然，没有夸张的表情，动作，语气，全程的人物形象保持稳定，"
+        f"不要在视频中生成字幕，口播台词为：{script_text}"
+    )
+
+
 def _submit_task(image_path: str, scene: dict) -> str:
     """
-    提交图生视频任务，返回 task_id
+    提交图生视频任务（首尾帧相同），返回 task_id
     Action: CVSync2AsyncSubmitTask
     """
     duration = max(config.SCENE_MIN_DURATION, min(scene["duration"], config.SCENE_MAX_DURATION))
@@ -107,14 +106,14 @@ def _submit_task(image_path: str, scene: dict) -> str:
     frames = 121 if duration <= 5 else 241
 
     script_text = scene.get("script", "")
-    visual_note = scene.get("visual_note", "")
-    video_prompt = VIDEO_PROMPT_PREFIX + f"dialogue: \"{script_text}\", {visual_note}"
+    video_prompt = _build_video_prompt(script_text)
 
     image_b64 = _image_to_base64(image_path)
 
     payload = {
         "req_key": config.JIMENG_VIDEO_MODEL,
-        "binary_data_base64": [image_b64],
+        # 首尾帧相同：binary_data_base64[0]=首帧, binary_data_base64[1]=尾帧
+        "binary_data_base64": [image_b64, image_b64],
         "prompt": video_prompt,
         "seed": -1,
         "frames": frames,
@@ -131,14 +130,15 @@ def _submit_task(image_path: str, scene: dict) -> str:
         f"{config.JIMENG_BASE_URL}?{query}",
         headers=headers, data=body, timeout=60
     )
-    resp.raise_for_status()
+    if not resp.ok:
+        raise RuntimeError(f"HTTP {resp.status_code}，响应体: {resp.text[:500]}")
     result = resp.json()
 
     if result.get("code") != 10000:
         raise RuntimeError(f"即梦AI提交失败: code={result.get('code')} msg={result.get('message')}")
 
     task_id = result["data"]["task_id"]
-    print(f"[Video Generator] 任务已提交 task_id={task_id}")
+    print(f"[API Generator] 任务已提交 task_id={task_id}")
     return task_id
 
 
@@ -156,11 +156,10 @@ def _poll_task(task_id: str, max_wait: int = 600) -> str:
     params = {"Action": "CVSync2AsyncGetResult", "Version": "2022-08-31"}
 
     start = time.time()
-    interval = 10  # 每10秒轮询一次
-    time.sleep(5)  # 提交后稍等再开始轮询
+    interval = 10
+    time.sleep(5)
 
     while time.time() - start < max_wait:
-        # 带重试的轮询请求（网络抖动时重试3次）
         last_err = None
         for attempt in range(3):
             try:
@@ -198,7 +197,7 @@ def _poll_task(task_id: str, max_wait: int = 600) -> str:
             raise RuntimeError(f"任务异常，status={status}")
         else:
             elapsed = int(time.time() - start)
-            print(f"[Video Generator] 等待中 status={status} 已等待{elapsed}s task_id={task_id[:8]}...")
+            print(f"[API Generator] 等待中 status={status} 已等待{elapsed}s task_id={task_id[:8]}...")
             time.sleep(interval)
 
     raise TimeoutError(f"视频生成超时（{max_wait}s），task_id={task_id}")
@@ -213,17 +212,17 @@ def _download_video(url: str, save_path: str) -> bool:
                 f.write(chunk)
         return True
     except Exception as e:
-        print(f"[Video Generator] 视频下载失败: {e}")
+        print(f"[API Generator] 视频下载失败: {e}")
         return False
 
 
 def run(image_paths: list, scenes: list, output_dir: str = None) -> dict:
     """
-    运行 Video Generator 节点
+    运行 API Video Generator 节点（火山引擎首尾帧接口）
 
     Args:
-        image_paths: 人物图片路径列表（至少1张，循环使用）
-        scenes: 分镜列表（来自 Script Generator）
+        image_paths: 人物图片路径列表（首尾帧均使用同一张图，循环使用）
+        scenes: 分镜列表（来自 Script Generator，每项含 scene_id/duration/script）
         output_dir: 输出目录
 
     Returns:
@@ -249,35 +248,32 @@ def run(image_paths: list, scenes: list, output_dir: str = None) -> dict:
         scene_id = scene.get("scene_id", i + 1)
         image_path = image_paths[i % len(image_paths)]
 
-        print(f"[Video Generator] 处理分镜 {scene_id}/{len(scenes)}：{scene.get('script', '')[:30]}...")
+        print(f"[API Generator] 处理分镜 {scene_id}/{len(scenes)}：{scene.get('script', '')[:30]}...")
 
         try:
-            # 1. 提交任务
             task_id = _submit_task(image_path, scene)
 
-            # 2. 轮询结果
-            print(f"[Video Generator] 等待视频生成（最长10分钟）...")
+            print(f"[API Generator] 等待视频生成（最长10分钟）...")
             video_url = _poll_task(task_id)
 
-            # 3. 下载视频
             filename = f"scene_{scene_id:03d}_{int(time.time())}.mp4"
             save_path = os.path.join(output_dir, filename)
 
             if _download_video(video_url, save_path):
                 video_paths.append(save_path)
                 video_urls.append(video_url)
-                print(f"[Video Generator] 分镜 {scene_id} 视频已保存: {save_path}")
+                print(f"[API Generator] 分镜 {scene_id} 视频已保存: {save_path}")
             else:
                 raise RuntimeError("视频下载失败")
 
         except Exception as e:
-            print(f"[Video Generator] 分镜 {scene_id} 生成失败: {e}")
+            print(f"[API Generator] 分镜 {scene_id} 生成失败: {e}")
             failed_scenes.append(scene_id)
             video_paths.append(None)
             video_urls.append(None)
 
     success_count = sum(1 for p in video_paths if p is not None)
-    print(f"[Video Generator] 视频生成完成：{success_count}/{len(scenes)} 段成功。")
+    print(f"[API Generator] 视频生成完成：{success_count}/{len(scenes)} 段成功。")
 
     return {
         "success": len(failed_scenes) == 0,
