@@ -58,6 +58,16 @@
 
 ---
 
+## V3 版本主要更新特性
+
+- **交互式节点干预 (Interactive Checkpoints)**：引入 `interactive.py`，在生成流程中增加剧本确认、首帧图片选择、公网 URL 补全等 Checkpoint，支持暂停等待用户确认或修改，提升对最终产出的把控力。
+- **命令行快捷断点续跑**：`main.py` 新增 `argparse` 支持，通过运行 `python main.py -r <run_id>` 即可从上一次失败或暂停的 Checkpoint 无缝续跑。强化了状态检测逻辑（如自动检测失效的公网图片 URL 并提示补全）。
+- **提示词集中管理**：新增 `prompts_config.py`，将所有大模型（Story Maker、特征提取、剧本生成等）的 Prompt 模板统一抽离管理，方便后续调优与 GUI 对接。
+- **解耦与 GUI 预留**：拆分底层工作流与 I/O 交互，预留 `app.py` 为后续接入 Web UI / Gradio 图形界面提供入口。
+- **配置与安全隔离**：对 `config.py` 中的所有 API Key、本地路径及存储桶配置进行了彻底的脱敏处理。
+
+---
+
 ## 快速开始
 
 ### 1. 安装依赖
@@ -127,9 +137,31 @@ PRODUCT_INPUT = {
 }
 ```
 
-### 5. 运行
+### 5. 运行与续跑
 ```bash
+# 启动全新任务
 python main.py
+
+# 从中途的交互节点或报错处断点续跑（自动读取对应缓存）
+python main.py -r 20260513_120000
+```
+
+---
+
+## 核心文件结构
+
+```text
+├── config.py              # 统一的配置中心（API Key、路径、参数脱敏管理）
+├── prompts_config.py      # 统一提示词管理模块（V2新增，集中管理所有LLM提示词）
+├── interactive.py         # 统一交互确认模块（V2新增，处理CLI与UI人工干预）
+├── main.py                # 命令行执行入口
+├── app.py                 # 图形界面入口（预留）
+├── workflow.py            # 工作流主控制器
+└── nodes/                 # 各个执行节点逻辑
+    ├── story_maker.py
+    ├── key_feature_extractor.py
+    ├── script_generator.py
+    └── ...
 ```
 
 ---
@@ -155,17 +187,21 @@ output/
 
 ---
 
-## 断点续跑
+## 断点续跑与交互式确认
 
-工作流每步完成后自动保存 `state.json`。若中途失败，传入对应 `run_id` 即可从断点继续：
+工作流每步完成后自动保存 `state.json`。中途遇到交互式确认点（如确认脚本、确认图片、补全图片公网URL）或程序报错退出时，可通过传入对应的 `run_id` 恢复进度：
 
+```bash
+python main.py -r 20260513_120000
+```
+或在代码中调用：
 ```python
 workflow.run(**PRODUCT_INPUT, run_id="20260513_120000")
 ```
 
 各步骤独立判断缓存状态，已完成的步骤自动跳过，节省时间与费用。
 
-> **注意**：若遇到"Omni 模式需要图片 URL（image_urls），当前为空"错误，说明图片 URL 已过期（有效期约1小时）。此时需要从 `state.json` 中删除 `image_paths` 和 `card_paths` 两个键，重新运行以触发重新生图。
+> **自动检测失效保护（V2新增）**：若在 Omni 模式下由于网络问题或 `image_url` 为空导致数字人生成失败，系统会自动重置对应的检查点（Checkpoint 3），重新运行后会暂停并提示你手动输入缺失的公网 HTTPS 图片链接，补全后即可直接进入视频生成，无需重头跑。
 
 ---
 

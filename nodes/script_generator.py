@@ -10,6 +10,10 @@ import json
 import re
 from openai import OpenAI
 import config
+try:
+    import prompts_config as _pc
+except ImportError:
+    _pc = None
 
 
 SYSTEM_PROMPT = """你是一位专业的短视频口播广告脚本创作者，擅长为真人出镜广告写单人口播脚本。
@@ -100,7 +104,10 @@ def run(story: str, total_duration: int = 30) -> dict:
         base_url=config.QWEN_BASE_URL,
     )
 
-    user_message = USER_PROMPT_TEMPLATE.format(
+    sys_prompt = (getattr(_pc, "SCRIPT_GENERATOR_SYSTEM", None) or SYSTEM_PROMPT) if _pc else SYSTEM_PROMPT
+    user_tmpl  = (getattr(_pc, "SCRIPT_GENERATOR_USER",   None) or USER_PROMPT_TEMPLATE) if _pc else USER_PROMPT_TEMPLATE
+
+    user_message = user_tmpl.format(
         story=story,
         total_duration=total_duration,
         min_duration=config.SCENE_MIN_DURATION,
@@ -112,8 +119,8 @@ def run(story: str, total_duration: int = 30) -> dict:
     response = client.chat.completions.create(
         model=config.QWEN_MODEL,
         messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_message},
+            {"role": "system", "content": sys_prompt},
+            {"role": "user",   "content": user_message},
         ],
         temperature=0.7,
     )

@@ -9,6 +9,10 @@
 
 from openai import OpenAI
 import config
+try:
+    import prompts_config as _pc
+except ImportError:
+    _pc = None
 
 
 SYSTEM_PROMPT = """你是一位专业的 TTS 音色选择专家。
@@ -95,7 +99,10 @@ def run(feature_prompt: str, story: str) -> dict:
         base_url=config.QWEN_BASE_URL,
     )
 
-    user_message = USER_PROMPT_TEMPLATE.format(
+    sys_prompt = (getattr(_pc, "VOICE_TYPE_SYSTEM", None) or SYSTEM_PROMPT) if _pc else SYSTEM_PROMPT
+    user_tmpl  = (getattr(_pc, "VOICE_TYPE_USER",   None) or USER_PROMPT_TEMPLATE) if _pc else USER_PROMPT_TEMPLATE
+
+    user_message = user_tmpl.format(
         feature_prompt=feature_prompt,
         story=story,
     )
@@ -105,8 +112,8 @@ def run(feature_prompt: str, story: str) -> dict:
     response = client.chat.completions.create(
         model=config.QWEN_MODEL,
         messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_message},
+            {"role": "system", "content": sys_prompt},
+            {"role": "user",   "content": user_message},
         ],
         temperature=0.1,   # 低温度，保证输出稳定性
     )

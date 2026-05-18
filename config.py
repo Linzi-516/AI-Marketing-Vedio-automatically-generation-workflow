@@ -5,21 +5,21 @@
 # ============================================================
 # API Keys（填入你的真实 Key）
 # ============================================================
-QWEN_API_KEY = "your_qwen_api_key_here"
+QWEN_API_KEY = "YOUR_QWEN_API_KEY_HERE"
 QWEN_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 QWEN_MODEL = "qwen-plus"  # 可换 qwen-max / qwen-turbo
 
-OPENAI_API_KEY = "your_openai_api_key_here"
+OPENAI_API_KEY = "YOUR_OPENAI_API_KEY_HERE"
 
-JIMENG_API_KEY = "your_volcengine_access_key_id_here"     # 即梦AI / 火山引擎 API Key
-JIMENG_API_SECRET = "your_volcengine_secret_access_key_here"  # 即梦AI / 火山引擎 API Secret
+JIMENG_API_KEY = "YOUR_JIMENG_API_KEY_HERE"     # 即梦AI / 火山引擎 API Key
+JIMENG_API_SECRET = "YOUR_JIMENG_API_SECRET_HERE"  # 即梦AI / 火山引擎 API Secret
 
 # ============================================================
 # 火山引擎 TTS（语音合成）配置
 # 来源：语音技术控制台 → 创建应用 → 语音合成 → 获取 APP_ID / Access Token / ClusterID
 # ============================================================
-TTS_APP_ID       = "your_tts_app_id_here"          # 控制台应用的 APP ID
-TTS_ACCESS_TOKEN = "your_tts_access_token_here"    # 控制台应用的 Access Token
+TTS_APP_ID       = "YOUR_TTS_APP_ID_HERE"          # 控制台应用的 APP ID
+TTS_ACCESS_TOKEN = "YOUR_TTS_ACCESS_TOKEN_HERE"    # 控制台应用的 Access Token
 TTS_CLUSTER      = "volcano_tts"              # 固定值（普通话合成集群）
 TTS_URL          = "https://openspeech.bytedance.com/api/v1/tts"
 
@@ -101,9 +101,9 @@ JIMENG_MODELCARD_STEPS = 30     # 推理步数（图生图可适当多一些）
 # 灰底人物姿势参考图（共3张，用于生成模特模卡图）
 # 请将3张灰底姿势剪影图的绝对路径填入下方列表
 MODELCARD_SILHOUETTE_PATHS = [
-    r"灰底姿势剪影图的绝对路径1",   # 姿势1（如站姿正面）
-    r"灰底姿势剪影图的绝对路径2",   # 姿势2（如站姿侧面）
-    r"灰底姿势剪影图的绝对路径3",   # 姿势3（如行走姿势）
+    r"C:\path\to\your\正面剪影.png",   # 姿势1（如站姿正面）
+    r"C:\path\to\your\侧面剪影.png",   # 姿势2（如站姿侧面）
+    r"C:\path\to\your\正面带姿势剪影.png",   # 姿势3（如行走姿势）
 ]
 
 # 视频生成参数
@@ -148,7 +148,7 @@ OMNI_FAST_MODE         = False   # 快速模式（True=降质换速，1080P 建�
 #   → 获取 Access Key / Secret Key（与 JIMENG 共用同一对 AK/SK 即可）
 # ============================================================
 TOS_REGION      = "cn-beijing"   # 桶所在地域，与创建时保持一致
-TOS_BUCKET      = "ai-marketing"   # 你创建的桶名称，例如 "my-audio-bucket"
+TOS_BUCKET      = "your-bucket-name"   # 你创建的桶名称，例如 "my-audio-bucket"
 TOS_ENDPOINT    = "tos-cn-beijing.volces.com"   # 地域对应的 Endpoint（cn-beijing 固定此值）
 # TOS AK/SK 直接复用 JIMENG 的即可（同一个火山引擎账号）
 # TOS_ACCESS_KEY = JIMENG_API_KEY    ← 在下方函数里直接引用，无需重复填写
@@ -187,4 +187,4 @@ def audio_uploader(local_path: str) -> str:
 IMAGE_COUNT = 1
 
 # 输出目录
-OUTPUT_DIR = r"在此输入存储路径"
+OUTPUT_DIR = r"D:\path\to\your\output"
