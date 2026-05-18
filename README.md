@@ -61,7 +61,6 @@
 ## V3 版本主要更新特性
 
 - **交互式节点干预 (Interactive Checkpoints)**：引入 `interactive.py`，在生成流程中增加剧本确认、首帧图片选择、公网 URL 补全等 Checkpoint，支持暂停等待用户确认或修改，提升对最终产出的把控力。
-- **命令行快捷断点续跑**：`main.py` 新增 `argparse` 支持，通过运行 `python main.py -r <run_id>` 即可从上一次失败或暂停的 Checkpoint 无缝续跑。强化了状态检测逻辑（如自动检测失效的公网图片 URL 并提示补全）。
 - **提示词集中管理**：新增 `prompts_config.py`，将所有大模型（Story Maker、特征提取、剧本生成等）的 Prompt 模板统一抽离管理，方便后续调优与 GUI 对接。
 - **解耦与 GUI 预留**：拆分底层工作流与 I/O 交互，预留 `app.py` 为后续接入 Web UI / Gradio 图形界面提供入口。
 - **配置与安全隔离**：对 `config.py` 中的所有 API Key、本地路径及存储桶配置进行了彻底的脱敏处理。
@@ -191,10 +190,7 @@ output/
 
 工作流每步完成后自动保存 `state.json`。中途遇到交互式确认点（如确认脚本、确认图片、补全图片公网URL）或程序报错退出时，可通过传入对应的 `run_id` 恢复进度：
 
-```bash
-python main.py -r 20260513_120000
-```
-或在代码中调用：
+在代码中调用：
 ```python
 workflow.run(**PRODUCT_INPUT, run_id="20260513_120000")
 ```
