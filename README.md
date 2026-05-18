@@ -142,8 +142,8 @@ PRODUCT_INPUT = {
 # 启动全新任务
 python main.py
 
-# 从中途的交互节点或报错处断点续跑（自动读取对应缓存）
-python main.py -r 20260513_120000
+# 启动旧任务
+#main.py 中修改run_id="xxxx"
 ```
 
 ---

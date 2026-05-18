@@ -35,7 +35,7 @@ PRODUCT_INPUT = {
 if __name__ == "__main__":
     result = workflow.run(
         **PRODUCT_INPUT,
-        run_id="20260519_001032",       # 留空自动生成新 Run ID；填入已有 ID 可断点续跑
+        run_id=None,       # 留空自动生成新 Run ID；填入已有 ID 可断点续跑
         # run_id="20260517_022956",   # 断点续跑示例
     )
 
