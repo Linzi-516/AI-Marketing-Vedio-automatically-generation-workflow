@@ -187,4 +187,4 @@ def audio_uploader(local_path: str) -> str:
 IMAGE_COUNT = 1
 
 # 输出目录
-OUTPUT_DIR = r"D:\path\to\your\output"
+OUTPUT_DIR = r"D:\6031ouput"

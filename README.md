@@ -79,11 +79,16 @@
 pip install -r requirements.txt
 ```
 
-### 2. 启动图形化界面（推荐）
+### 2. 启动图形化界面
 ```bash
 python app.py
 ```
 程序启动后会自动在浏览器打开 `http://127.0.0.1:7860`。
+
+```bash
+python main.py
+```
+可在后台直接运行，该方法更加稳健。
 
 ### 3. 配置 API Key 及路径
 您可以在 Web UI 的 **"⚙️ API 配置"** 页面直接填入并保存配置，或手动编辑 `config.py`：

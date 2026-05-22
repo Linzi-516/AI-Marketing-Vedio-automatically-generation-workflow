@@ -26,6 +26,22 @@ import workflow
 #  后端辅助函数：将 UI 数据写入 config / prompts_config 模块
 # ══════════════════════════════════════════════════════════════
 
+def open_folder_dialog(current_val):
+    """使用 tkinter 弹出本地文件夹选择对话框"""
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+        root = tk.Tk()
+        root.attributes("-topmost", True)
+        root.withdraw()
+        folder_path = filedialog.askdirectory(initialdir=current_val, title="选择输出目录")
+        root.destroy()
+        if folder_path:
+            return folder_path
+    except Exception as e:
+        print(f"打开文件夹选择器失败: {e}")
+    return current_val
+
 def apply_api_config(
     qwen_key, qwen_url, qwen_model,
     jimeng_key, jimeng_secret,
@@ -259,51 +275,30 @@ body, .gradio-container {
     background-color: #f8fafc !important;
 }
 
-/* ── 左侧边栏（Logo区 + 导航Tab） ── */
-/* 隐藏顶部header（已移入侧边栏） */
-#app-header { display: none !important; }
-
-/* 整体容器使用flex横向布局 */
-.gradio-container > .main > .wrap,
-.gradio-container .tabs {
-    display: flex !important;
-    flex-direction: row !important;
+/* ── 整体布局 ── */
+.main-layout {
+    flex-wrap: nowrap !important;
     min-height: 100vh !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    gap: 0 !important;
 }
 
-/* Tab导航栏 = 左侧边栏 */
-.gradio-tabs .tab-nav {
+/* ── 左侧边栏 ── */
+.sidebar {
     background: #1e293b !important;
-    border-right: none !important;
-    border-bottom: none !important;
-    flex-direction: column !important;
-    width: 200px !important;
-    min-width: 200px !important;
-    min-height: 100vh !important;
-    padding: 0 !important;
+    min-width: 220px !important;
+    max-width: 220px !important;
+    height: 100vh !important;
     position: sticky !important;
     top: 0 !important;
-    align-self: flex-start !important;
-    height: 100vh !important;
-    overflow: hidden !important;
-    flex-shrink: 0 !important;
+    padding: 20px 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
     z-index: 100 !important;
 }
 
-/* 侧边栏顶部 Logo 区 */
-.gradio-tabs .tab-nav::before {
-    content: "🥩  牛排工作室";
-    display: block !important;
-    padding: 20px 16px 6px 16px !important;
-    font-size: 15px !important;
-    font-weight: 700 !important;
-    color: #ffffff !important;
-    letter-spacing: 0.01em !important;
-    white-space: nowrap !important;
-}
-.gradio-tabs .tab-nav::after {
-    content: "导航菜单";
-    display: block !important;
+.sidebar-title {
     padding: 0 16px 12px 16px !important;
     font-size: 10px !important;
     color: #64748b !important;
@@ -314,35 +309,59 @@ body, .gradio-container {
 }
 
 /* 导航按钮 */
-.gradio-tabs .tab-nav button {
+.nav-btn {
     width: 100% !important;
     text-align: left !important;
-    padding: 10px 20px !important;
-    border-radius: 0 !important;
+    padding: 12px 24px !important;
     border: none !important;
-    font-size: 13px !important;
-    font-weight: 500 !important;
-    color: #94a3b8 !important;
+    border-radius: 0 !important;
     background: transparent !important;
+    color: #94a3b8 !important;
+    font-size: 14px !important;
+    justify-content: flex-start !important;
+    box-shadow: none !important;
     border-left: 3px solid transparent !important;
     transition: all 0.15s !important;
 }
-.gradio-tabs .tab-nav button:hover {
-    background: rgba(255,255,255,0.06) !important;
-    color: #e2e8f0 !important;
+.nav-btn:hover {
+    background: rgba(255,255,255,0.05) !important;
+    color: white !important;
 }
-.gradio-tabs .tab-nav button.selected {
+.nav-btn.selected {
     background: rgba(51,112,255,0.15) !important;
     color: #60a5fa !important;
     border-left-color: #3370ff !important;
 }
 
 /* 内容区 */
-.gradio-tabs .tabitem {
-    padding: 24px !important;
+.content-area {
+    padding: 24px 32px !important;
     background: #f8fafc !important;
     flex: 1 !important;
     min-width: 0 !important;
+}
+
+/* 页面右上角 Header (Logo) */
+.content-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #e2e8f0;
+}
+.logo-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.logo-icon {
+    font-size: 24px;
+}
+.logo-text {
+    font-weight: 700;
+    font-size: 16px;
+    color: #1e293b;
 }
 
 /* ── 内容卡片 ── */
@@ -618,641 +637,693 @@ def build_ui():
         ),
     ) as demo:
 
-        # ── 侧边栏 Logo 由 CSS ::before/::after 注入，无需额外 HTML ──
+        with gr.Row(elem_classes="main-layout"):
+            # ── 真正的左侧边栏 ──
+            with gr.Column(elem_classes="sidebar"):
+                gr.HTML('<div style="color:white; font-size:15px; font-weight:700; padding: 20px 16px 6px; white-space:nowrap; letter-spacing:0.01em;">🥩  牛排工作室</div>')
+                gr.HTML('<div class="sidebar-title">导航菜单</div>')
+                
+                nav_api    = gr.Button("⚙️ API 配置",    elem_classes="nav-btn selected")
+                nav_prod   = gr.Button("📦 产品信息",    elem_classes="nav-btn")
+                nav_param  = gr.Button("🎛️ 参数配置",    elem_classes="nav-btn")
+                nav_run    = gr.Button("▶️ 引擎 & 运行", elem_classes="nav-btn")
+                nav_prompt = gr.Button("✏️ 提示词编辑",  elem_classes="nav-btn")
+                
+                gr.HTML('<div id="sidebar-status">🟢 系统正常运行中</div>')
 
-        # ── 主体区：Tab 作为侧边导航 ──────────────────────────────────────────
-        with gr.Tabs(elem_classes="gradio-tabs"):
+            # ── 右侧主内容区 ──
+            with gr.Column(elem_classes="content-area"):
+                
+                    # 页面右上角 Header (只显示一个大的Logo/文字)
+                gr.HTML("""
+                    <div class="content-header">
+                   <div></div>
+                   <div class="logo-container">
+                          <span class="logo-icon">🥩</span>
+                          <span class="logo-text">牛排工作室 Steak Studio</span>
+                   </div>
+                    </div>
+                """)
 
-            # ════════════════════════════════════════════════════
-            #  页面 1：API 配置
-            # ════════════════════════════════════════════════════
-            with gr.TabItem("⚙️  API 配置"):
-                gr.HTML('<div class="page-title"><h2>API 配置</h2><span>配置所有底层 AI 引擎的访问权限</span></div>')
+                # ════════════════════════════════════════════════════
+                #  页面 1：API 配置
+                # ════════════════════════════════════════════════════
+                with gr.Group(visible=True) as page_api:
+                    gr.HTML('<div class="page-title"><h2>API 配置</h2><span>配置所有底层 AI 引擎的访问权限</span></div>')
 
-                with gr.Row():
-                    # 阿里云·通义千问
-                    with gr.Column():
-                        gr.HTML('<div class="card-header">☁️ 阿里云·通义千问</div>')
-                        qwen_key   = gr.Textbox(label="API Key",   value=cfg["qwen_key"],   type="password", placeholder="sk-***")
-                        qwen_url   = gr.Textbox(label="Base URL",  value=cfg["qwen_url"])
-                        qwen_model = gr.Textbox(label="Model",     value=cfg["qwen_model"])
-
-                    # 火山引擎·即梦 AI
-                    with gr.Column():
-                        gr.HTML('<div class="card-header">✨ 火山引擎·即梦 AI</div>')
-                        jimeng_key    = gr.Textbox(label="AccessKey ID", value=cfg["jimeng_key"],    type="password", placeholder="AK***")
-                        jimeng_secret = gr.Textbox(label="Secret Key",   value=cfg["jimeng_secret"], type="password", placeholder="SK***")
-
-                with gr.Row():
-                    # 火山引擎·TTS
-                    with gr.Column():
-                        gr.HTML('<div class="card-header">🎙️ 火山引擎·语音合成 (TTS)</div>')
-                        tts_app_id  = gr.Textbox(label="APP_ID",  value=cfg["tts_app_id"],  placeholder="请输入 APP_ID")
-                        tts_token   = gr.Textbox(label="Token",   value=cfg["tts_token"],   type="password", placeholder="Access Token")
-                        tts_cluster = gr.Textbox(label="Cluster", value=cfg["tts_cluster"])
-
-                    # 火山引擎·TOS
-                    with gr.Column():
-                        gr.HTML('<div class="card-header">🗄️ 火山引擎·对象存储 (TOS)</div>')
-                        tos_region   = gr.Textbox(label="Region",   value=cfg["tos_region"])
-                        tos_bucket   = gr.Textbox(label="Bucket",   value=cfg["tos_bucket"],   placeholder="存储桶名称")
-                        tos_endpoint = gr.Textbox(label="Endpoint", value=cfg["tos_endpoint"])
-
-                # 输出目录
-                gr.HTML('<div class="card-header" style="margin-top:8px;">📁 输出目录设置</div>')
-                with gr.Row():
-                    output_dir = gr.Textbox(label="输出目录（本地路径）", value=cfg["output_dir"], scale=4)
-                    gr.Button("浏览", elem_classes="btn-secondary", scale=1)
-
-                with gr.Row():
-                    api_save_btn = gr.Button("💾  保存 API 配置", elem_classes="btn-primary")
-                    api_status   = gr.Textbox(label="", value="等待保存...", interactive=False, show_label=False, scale=2)
-
-                def _save_api(qk, qu, qm, jk, js, ta, tt, tc, tr, tb, te, od):
-                    msg = apply_api_config(qk, qu, qm, jk, js, ta, tt, tc, tr, tb, te, od)
-                    return f"✅ {msg}（{time.strftime('%H:%M:%S')}）"
-
-                api_save_btn.click(
-                    _save_api,
-                    inputs=[qwen_key, qwen_url, qwen_model,
-                            jimeng_key, jimeng_secret,
-                            tts_app_id, tts_token, tts_cluster,
-                            tos_region, tos_bucket, tos_endpoint,
-                            output_dir],
-                    outputs=api_status,
-                )
-
-            # ════════════════════════════════════════════════════
-            #  页面 2：产品信息
-            # ════════════════════════════════════════════════════
-            with gr.TabItem("📦  产品信息"):
-                gr.HTML('<div class="page-title"><h2>产品信息</h2><span>定义营销视频的核心内容资产</span></div>')
-
-                gr.HTML('<div class="card-header">ℹ️ 基础信息</div>')
-                with gr.Row():
-                    prod_name  = gr.Textbox(label="产品名称（必填）", placeholder="例如：智能 AI 视频剪辑助手", scale=1)
-                    prod_offer = gr.Textbox(label="产品功能 / Offer",  placeholder="例如：30秒快速生成高质量短视频", scale=1)
-
-                gr.HTML('<div class="card-header" style="margin-top:8px;">👥 人群与痛点</div>')
-                with gr.Row():
-                    target_audience = gr.Textbox(label="目标受众", placeholder="例如：中小企业主、短视频博主、电商运营", scale=1)
-                    pain_points     = gr.Textbox(
-                        label="核心痛点",
-                        placeholder="例如：\n1. 剪辑视频耗时长，成本高\n2. 缺乏创意，视频完播率低",
-                        lines=4, scale=1,
-                    )
-
-                gr.HTML('<div style="color:#64748b;font-size:12px;margin-top:8px;">✅ 产品信息将在点击"开始生成"时自动读取，无需单独保存。</div>')
-
-            # ════════════════════════════════════════════════════
-            #  页面 3：参数配置
-            # ════════════════════════════════════════════════════
-            with gr.TabItem("🎛️  参数配置"):
-                gr.HTML('<div class="page-title"><h2>参数配置</h2><span>精细化控制生成过程的技术参数</span></div>')
-
-                with gr.Row():
-                    # 分镜参数
-                    with gr.Column():
-                        gr.HTML('<div class="card-header">🎬 分镜参数</div>')
-                        scene_min  = gr.Number(label="最短分镜时长（秒）", value=cfg["scene_min"],  precision=0)
-                        scene_max  = gr.Number(label="最长分镜时长（秒）", value=cfg["scene_max"],  precision=0)
-                        image_count= gr.Number(label="生成人物图片数量",   value=cfg["image_count"], precision=0)
-
-                    # 图片参数
-                    with gr.Column():
-                        gr.HTML('<div class="card-header">🖼️ 图片参数</div>')
-                        with gr.Row():
-                            image_width  = gr.Number(label="宽度",  value=cfg["image_width"],  precision=0)
-                            image_height = gr.Number(label="高度",  value=cfg["image_height"], precision=0)
-                        image_scale = gr.Slider(label="CFG 引导强度", minimum=1, maximum=30, step=0.5, value=cfg["image_scale"])
-                        image_steps = gr.Slider(label="推理步数",     minimum=1, maximum=50, step=1,   value=cfg["image_steps"])
-
-                    # 视频参数
-                    with gr.Column():
-                        gr.HTML('<div class="card-header">🎥 视频参数</div>')
-                        with gr.Row():
-                            video_width  = gr.Number(label="视频宽度", value=cfg["video_width"],  precision=0)
-                            video_height = gr.Number(label="视频高度", value=cfg["video_height"], precision=0)
-                        omni_resolution = gr.Radio(
-                            label="Omni 输出分辨率",
-                            choices=[720, 1080],
-                            value=cfg["omni_resolution"],
-                        )
-                        omni_fast = gr.Checkbox(label="Omni 快速模式", value=cfg["omni_fast"])
-
-                with gr.Row(elem_classes="justify-end"):
-                    param_save_btn = gr.Button("💾  保存参数", elem_classes="btn-primary")
-                    param_status   = gr.Textbox(label="", value="等待保存...", interactive=False, show_label=False, scale=2)
-
-                def _save_params(smin, smax, iw, ih, iscale, isteps, vw, vh, ores, ofast, icount):
-                    msg = apply_params(smin, smax, iw, ih, iscale, isteps, vw, vh, ores, ofast, icount)
-                    return f"✅ {msg}（{time.strftime('%H:%M:%S')}）"
-
-                param_save_btn.click(
-                    _save_params,
-                    inputs=[scene_min, scene_max, image_width, image_height,
-                            image_scale, image_steps, video_width, video_height,
-                            omni_resolution, omni_fast, image_count],
-                    outputs=param_status,
-                )
-
-            # ════════════════════════════════════════════════════
-            #  页面 4：引擎选择 & 运行（核心页面）
-            # ════════════════════════════════════════════════════
-            with gr.TabItem("▶️  引擎 & 运行"):
-                gr.HTML('<div class="page-title"><h2>引擎选择 &amp; 运行</h2><span>启动生成任务并监控实时进度</span></div>')
-
-                with gr.Row():
-                    # ── 左侧：配置 + 启动 ─────────────────────────────────────
-                    with gr.Column(scale=1):
-                        gr.HTML('<div class="card-header">🚀 视频生成引擎</div>')
-                        engine_choice = gr.Radio(
-                            label="",
-                            choices=["omni", "api", "cli"],
-                            value=cfg.get("video_engine", "omni"),
-                            info="omni=OmniHuman数字人 | api=火山引擎首尾帧 | cli=本地dreamina"
-                        )
-
-                        total_duration = gr.Slider(
-                            label="视频总时长（秒）",
-                            minimum=10, maximum=90, step=5, value=30,
-                        )
-
-                        run_id_input = gr.Textbox(
-                            label="断点续跑 Run ID",
-                            placeholder="留空则开启新任务",
-                        )
-                        run_id_refresh = gr.Button("🔄 加载历史 Run ID", elem_classes="btn-secondary")
-                        run_id_history = gr.Dropdown(label="历史任务", choices=[], interactive=True)
-
-                        def _refresh_run_ids():
-                            ids = _list_run_ids()
-                            return gr.Dropdown(choices=ids, value=ids[0] if ids else None)
-
-                        run_id_refresh.click(_refresh_run_ids, outputs=run_id_history)
-                        run_id_history.change(lambda v: v or "", inputs=run_id_history, outputs=run_id_input)
-
-                        run_btn  = gr.Button("▶  开始生成视频工作流", elem_classes="btn-run")
-                        stop_btn = gr.Button("⏹  停止（不可恢复）",    elem_classes="btn-danger")
-
-                    # ── 右侧：日志 + 状态 ─────────────────────────────────────
-                    with gr.Column(scale=1):
-                        gr.HTML('<div class="card-header">📋 实时运行日志</div>')
-                        log_box = gr.Textbox(
-                            label="",
-                            value='[系统就绪] 请填写产品信息后点击"开始生成"...',
-                            lines=14,
-                            max_lines=14,
-                            interactive=False,
-                            elem_classes="log-terminal",
-                        )
-                        workflow_status = gr.HTML('<div class="badge-idle">⏸ 空闲</div>')
-
-                        gr.HTML('<div class="card-header" style="margin-top:12px;">📄 脚本输出 (JSON)</div>')
-                        json_output = gr.JSON(label="", value={"status": "idle"})
-
-                # ── 轮询定时器（每 1.5s 刷新一次日志和交互状态） ──────────────
-                timer = gr.Timer(1.5)
-
-                # ── Checkpoint 区（默认隐藏，按需显示） ─────────────────────────
-                gr.HTML('<hr style="border-color:#e2e8f0;margin:16px 0;">')
-
-                # --- Checkpoint 1：图片确认 ---
-                with gr.Group(visible=False) as cp1_group:
-                    gr.HTML('<div class="checkpoint-box cp-image"><b>📸 Checkpoint 1 — 图片确认</b></div>')
-                    cp1_text    = gr.Markdown("")
-                    cp1_gallery = gr.Gallery(label="生成的人物图片", columns=3, height=260)
-                    cp1_new_prompt = gr.Textbox(label="修改生图提示词（可选，留空则使用原提示词重新生成）", placeholder="...")
                     with gr.Row():
-                        cp1_ok_btn   = gr.Button("✅ 满意，继续下一步", elem_classes="btn-success")
-                        cp1_redo_btn = gr.Button("🔄 不满意，重新生成", elem_classes="btn-danger")
+                        # 阿里云·通义千问
+                        with gr.Column():
+                            gr.HTML('<div class="card-header">☁️ 阿里云·通义千问</div>')
+                            qwen_key   = gr.Textbox(label="API Key",   value=cfg["qwen_key"],   type="password", placeholder="sk-***")
+                            qwen_url   = gr.Textbox(label="Base URL",  value=cfg["qwen_url"])
+                            qwen_model = gr.Textbox(label="Model",     value=cfg["qwen_model"])
 
-                # --- Checkpoint 2：脚本微调 ---
-                with gr.Group(visible=False) as cp2_group:
-                    gr.HTML('<div class="checkpoint-box cp-script"><b>📝 Checkpoint 2 — 脚本确认</b></div>')
-                    cp2_text   = gr.Markdown("")
-                    cp2_script = gr.Textbox(label="完整脚本（可直接编辑）", lines=4)
-                    cp2_scenes = gr.Dataframe(
-                        label="分镜明细（可编辑台词列）",
-                        headers=["scene_id", "duration", "script"],
-                        datatype=["number", "number", "str"],
-                        interactive=True,
-                        col_count=(3, "fixed"),
-                    )
+                        # 火山引擎·即梦 AI
+                        with gr.Column():
+                            gr.HTML('<div class="card-header">✨ 火山引擎·即梦 AI</div>')
+                            jimeng_key    = gr.Textbox(label="AccessKey ID", value=cfg["jimeng_key"],    type="password", placeholder="AK***")
+                            jimeng_secret = gr.Textbox(label="Secret Key",   value=cfg["jimeng_secret"], type="password", placeholder="SK***")
+
                     with gr.Row():
-                        cp2_ok_btn   = gr.Button("✅ 确认脚本，开始生成视频", elem_classes="btn-success")
-                        cp2_back_btn = gr.Button("✏️ 直接使用以上脚本",       elem_classes="btn-secondary")
+                        # 火山引擎·TTS
+                        with gr.Column():
+                            gr.HTML('<div class="card-header">🎙️ 火山引擎·语音合成 (TTS)</div>')
+                            tts_app_id  = gr.Textbox(label="APP_ID",  value=cfg["tts_app_id"],  placeholder="请输入 APP_ID")
+                            tts_token   = gr.Textbox(label="Token",   value=cfg["tts_token"],   type="password", placeholder="Access Token")
+                            tts_cluster = gr.Textbox(label="Cluster", value=cfg["tts_cluster"])
 
-                # --- Checkpoint 3：首帧图片选择（Omni 专用） ---
-                with gr.Group(visible=False) as cp3_group:
-                    gr.HTML('<div class="checkpoint-box cp-omni"><b>🎞️ Checkpoint 3 — 首帧图片分配（Omni 引擎专用）</b></div>')
-                    cp3_text    = gr.Markdown("")
-                    cp3_gallery = gr.Gallery(label="可用人物图片（点击查看序号）", columns=3, height=200)
-                    cp3_scenes_df = gr.Dataframe(
-                        label="请为每段分镜填写图片序号（序号从 1 开始）",
-                        headers=["scene_id", "duration", "script_preview", "图片序号(1~N)"],
-                        datatype=["number", "number", "str", "number"],
-                        interactive=True,
-                        col_count=(4, "fixed"),
+                        # 火山引擎·TOS
+                        with gr.Column():
+                            gr.HTML('<div class="card-header">🗄️ 火山引擎·对象存储 (TOS)</div>')
+                            tos_region   = gr.Textbox(label="Region",   value=cfg["tos_region"])
+                            tos_bucket   = gr.Textbox(label="Bucket",   value=cfg["tos_bucket"],   placeholder="存储桶名称")
+                            tos_endpoint = gr.Textbox(label="Endpoint", value=cfg["tos_endpoint"])
+
+                    # 输出目录
+                    gr.HTML('<div class="card-header" style="margin-top:8px;">📁 输出目录设置</div>')
+                    with gr.Row():
+                        output_dir = gr.Textbox(label="输出目录（本地路径）", value=cfg["output_dir"], scale=4)
+                        browse_btn = gr.Button("浏览", elem_classes="btn-secondary", scale=1)
+                    
+                    browse_btn.click(open_folder_dialog, inputs=output_dir, outputs=output_dir)
+
+                    with gr.Row():
+                        api_save_btn = gr.Button("💾  保存 API 配置", elem_classes="btn-primary")
+                        api_status   = gr.Textbox(label="", value="等待保存...", interactive=False, show_label=False, scale=2)
+
+                    def _save_api(qk, qu, qm, jk, js, ta, tt, tc, tr, tb, te, od):
+                        msg = apply_api_config(qk, qu, qm, jk, js, ta, tt, tc, tr, tb, te, od)
+                        return f"✅ {msg}（{time.strftime('%H:%M:%S')}）"
+
+                    api_save_btn.click(
+                        _save_api,
+                        inputs=[qwen_key, qwen_url, qwen_model,
+                                jimeng_key, jimeng_secret,
+                                tts_app_id, tts_token, tts_cluster,
+                                tos_region, tos_bucket, tos_endpoint,
+                                output_dir],
+                        outputs=api_status,
                     )
-                    cp3_use_same  = gr.Checkbox(label="所有分镜使用同一张图片", value=False)
-                    cp3_same_idx  = gr.Number(label="统一使用的图片序号", value=1, visible=False, precision=0)
-                    cp3_use_same.change(lambda v: gr.Number(visible=v), inputs=cp3_use_same, outputs=cp3_same_idx)
-                    cp3_ok_btn    = gr.Button("✅ 确认首帧分配，开始合成视频", elem_classes="btn-success")
 
-                # ── 结果展示区 ──────────────────────────────────────────────
-                gr.HTML('<hr style="border-color:#e2e8f0;margin:16px 0;">')
-                gr.HTML('<div class="card-header">🎉 生成结果</div>')
-                with gr.Row():
-                    result_gallery = gr.Gallery(label="素材图片画廊", columns=3, height=260, scale=2)
-                    with gr.Column(scale=1):
-                        result_video  = gr.Video(label="最终生成视频（分镜片段）")
-                        result_audio  = gr.File(label="TTS 音频文件", file_count="multiple")
-                result_cards  = gr.Gallery(label="模特模卡图", columns=3, height=200)
+                # ════════════════════════════════════════════════════
+                #  页面 2：产品信息
+                # ════════════════════════════════════════════════════
+                with gr.Group(visible=False) as page_prod:
+                    gr.HTML('<div class="page-title"><h2>产品信息</h2><span>定义营销视频的核心内容资产</span></div>')
+
+                    gr.HTML('<div class="card-header">ℹ️ 基础信息</div>')
+                    with gr.Row():
+                        prod_name  = gr.Textbox(label="产品名称（必填）", placeholder="例如：智能 AI 视频剪辑助手", scale=1)
+                        prod_offer = gr.Textbox(label="产品功能 / Offer",  placeholder="例如：30秒快速生成高质量短视频", scale=1)
+
+                    gr.HTML('<div class="card-header" style="margin-top:8px;">👥 人群与痛点</div>')
+                    with gr.Row():
+                        target_audience = gr.Textbox(label="目标受众", placeholder="例如：中小企业主、短视频博主、电商运营", scale=1)
+                        pain_points     = gr.Textbox(
+                            label="核心痛点",
+                            placeholder="例如：\n1. 剪辑视频耗时长，成本高\n2. 缺乏创意，视频完播率低",
+                            lines=4, scale=1,
+                        )
+
+                    gr.HTML('<div style="color:#64748b;font-size:12px;margin-top:8px;">✅ 产品信息将在点击"开始生成"时自动读取，无需单独保存。</div>')
+
+                # ════════════════════════════════════════════════════
+                #  页面 3：参数配置
+                # ════════════════════════════════════════════════════
+                with gr.Group(visible=False) as page_param:
+                    gr.HTML('<div class="page-title"><h2>参数配置</h2><span>精细化控制生成过程的技术参数</span></div>')
+
+                    with gr.Row():
+                        # 分镜参数
+                        with gr.Column():
+                            gr.HTML('<div class="card-header">🎬 分镜参数</div>')
+                            scene_min  = gr.Number(label="最短分镜时长（秒）", value=cfg["scene_min"],  precision=0)
+                            scene_max  = gr.Number(label="最长分镜时长（秒）", value=cfg["scene_max"],  precision=0)
+                            image_count= gr.Number(label="生成人物图片数量",   value=cfg["image_count"], precision=0)
+
+                        # 图片参数
+                        with gr.Column():
+                            gr.HTML('<div class="card-header">🖼️ 图片参数</div>')
+                            with gr.Row():
+                                image_width  = gr.Number(label="宽度",  value=cfg["image_width"],  precision=0)
+                                image_height = gr.Number(label="高度",  value=cfg["image_height"], precision=0)
+                            image_scale = gr.Slider(label="CFG 引导强度", minimum=1, maximum=30, step=0.5, value=cfg["image_scale"])
+                            image_steps = gr.Slider(label="推理步数",     minimum=1, maximum=50, step=1,   value=cfg["image_steps"])
+
+                        # 视频参数
+                        with gr.Column():
+                            gr.HTML('<div class="card-header">🎥 视频参数</div>')
+                            with gr.Row():
+                                video_width  = gr.Number(label="视频宽度", value=cfg["video_width"],  precision=0)
+                                video_height = gr.Number(label="视频高度", value=cfg["video_height"], precision=0)
+                            omni_resolution = gr.Radio(
+                                label="Omni 输出分辨率",
+                                choices=[720, 1080],
+                                value=cfg["omni_resolution"],
+                            )
+                            omni_fast = gr.Checkbox(label="Omni 快速模式", value=cfg["omni_fast"])
+
+                    with gr.Row(elem_classes="justify-end"):
+                        param_save_btn = gr.Button("💾  保存参数", elem_classes="btn-primary")
+                        param_status   = gr.Textbox(label="", value="等待保存...", interactive=False, show_label=False, scale=2)
+
+                    def _save_params(smin, smax, iw, ih, iscale, isteps, vw, vh, ores, ofast, icount):
+                        msg = apply_params(smin, smax, iw, ih, iscale, isteps, vw, vh, ores, ofast, icount)
+                        return f"✅ {msg}（{time.strftime('%H:%M:%S')}）"
+
+                    param_save_btn.click(
+                        _save_params,
+                        inputs=[scene_min, scene_max, image_width, image_height,
+                                image_scale, image_steps, video_width, video_height,
+                                omni_resolution, omni_fast, image_count],
+                        outputs=param_status,
+                    )
+
+                # ════════════════════════════════════════════════════
+                #  页面 4：引擎选择 & 运行（核心页面）
+                # ════════════════════════════════════════════════════
+                with gr.Group(visible=False) as page_run:
+                    gr.HTML('<div class="page-title"><h2>引擎选择 &amp; 运行</h2><span>启动生成任务并监控实时进度</span></div>')
+
+                    with gr.Row():
+                        # ── 左侧：配置 + 启动 ─────────────────────────────────────
+                        with gr.Column(scale=1):
+                            gr.HTML('<div class="card-header">🚀 视频生成引擎</div>')
+                            engine_choice = gr.Radio(
+                                label="",
+                                choices=["omni", "api", "cli"],
+                                value=cfg.get("video_engine", "omni"),
+                                info="omni=OmniHuman数字人 | api=火山引擎首尾帧 | cli=本地dreamina"
+                            )
+
+                            total_duration = gr.Slider(
+                                label="视频总时长（秒）",
+                                minimum=10, maximum=90, step=5, value=30,
+                            )
+
+                            run_id_input = gr.Textbox(
+                                label="断点续跑 Run ID",
+                                placeholder="留空则开启新任务",
+                            )
+                            run_id_refresh = gr.Button("🔄 加载历史 Run ID", elem_classes="btn-secondary")
+                            run_id_history = gr.Dropdown(label="历史任务", choices=[], interactive=True)
+
+                            def _refresh_run_ids():
+                                ids = _list_run_ids()
+                                return gr.Dropdown(choices=ids, value=ids[0] if ids else None)
+
+                            run_id_refresh.click(_refresh_run_ids, outputs=run_id_history)
+                            run_id_history.change(lambda v: v or "", inputs=run_id_history, outputs=run_id_input)
+
+                            run_btn  = gr.Button("▶  开始生成视频工作流", elem_classes="btn-run")
+                            stop_btn = gr.Button("⏹  停止（不可恢复）",    elem_classes="btn-danger")
+
+                        # ── 右侧：日志 + 状态 ─────────────────────────────────────
+                        with gr.Column(scale=1):
+                            gr.HTML('<div class="card-header">📋 实时运行日志</div>')
+                            log_box = gr.Textbox(
+                                label="",
+                                value='[系统就绪] 请填写产品信息后点击"开始生成"...',
+                                lines=14,
+                                max_lines=14,
+                                interactive=False,
+                                elem_classes="log-terminal",
+                            )
+                            workflow_status = gr.HTML('<div class="badge-idle">⏸ 空闲</div>')
+
+                            gr.HTML('<div class="card-header" style="margin-top:12px;">📄 脚本输出 (JSON)</div>')
+                            json_output = gr.JSON(label="", value={"status": "idle"})
+
+                    # ── 轮询定时器（每 1.5s 刷新一次日志和交互状态） ──────────────
+                    timer = gr.Timer(1.5)
+
+                    # ── Checkpoint 区（默认隐藏，按需显示） ─────────────────────────
+                    gr.HTML('<hr style="border-color:#e2e8f0;margin:16px 0;">')
+
+                    # --- Checkpoint 1：图片确认 ---
+                    with gr.Group(visible=False) as cp1_group:
+                        gr.HTML('<div class="checkpoint-box cp-image"><b>📸 Checkpoint 1 — 图片确认</b></div>')
+                        cp1_text    = gr.Markdown("")
+                        cp1_gallery = gr.Gallery(label="生成的人物图片", columns=3, height=260)
+                        cp1_new_prompt = gr.Textbox(label="修改生图提示词（可选，留空则使用原提示词重新生成）", placeholder="...")
+                        with gr.Row():
+                            cp1_ok_btn   = gr.Button("✅ 满意，继续下一步", elem_classes="btn-success")
+                            cp1_redo_btn = gr.Button("🔄 不满意，重新生成", elem_classes="btn-danger")
+
+                    # --- Checkpoint 2：脚本微调 ---
+                    with gr.Group(visible=False) as cp2_group:
+                        gr.HTML('<div class="checkpoint-box cp-script"><b>📝 Checkpoint 2 — 脚本确认</b></div>')
+                        cp2_text   = gr.Markdown("")
+                        cp2_script = gr.Textbox(label="完整脚本（可直接编辑）", lines=4)
+                        cp2_scenes = gr.Dataframe(
+                            label="分镜明细（可编辑台词列）",
+                            headers=["scene_id", "duration", "script"],
+                            datatype=["number", "number", "str"],
+                            interactive=True,
+                            col_count=(3, "fixed"),
+                        )
+                        with gr.Row():
+                            cp2_ok_btn   = gr.Button("✅ 确认脚本，开始生成视频", elem_classes="btn-success")
+                            cp2_back_btn = gr.Button("✏️ 直接使用以上脚本",       elem_classes="btn-secondary")
+
+                    # --- Checkpoint 3：首帧图片选择（Omni 专用） ---
+                    with gr.Group(visible=False) as cp3_group:
+                        gr.HTML('<div class="checkpoint-box cp-omni"><b>🎞️ Checkpoint 3 — 首帧图片分配（Omni 引擎专用）</b></div>')
+                        cp3_text    = gr.Markdown("")
+                        cp3_gallery = gr.Gallery(label="可用人物图片（点击查看序号）", columns=3, height=200)
+                        cp3_scenes_df = gr.Dataframe(
+                            label="请为每段分镜填写图片序号（序号从 1 开始）",
+                            headers=["scene_id", "duration", "script_preview", "图片序号(1~N)"],
+                            datatype=["number", "number", "str", "number"],
+                            interactive=True,
+                            col_count=(4, "fixed"),
+                        )
+                        cp3_use_same  = gr.Checkbox(label="所有分镜使用同一张图片", value=False)
+                        cp3_same_idx  = gr.Number(label="统一使用的图片序号", value=1, visible=False, precision=0)
+                        cp3_use_same.change(lambda v: gr.Number(visible=v), inputs=cp3_use_same, outputs=cp3_same_idx)
+                        cp3_ok_btn    = gr.Button("✅ 确认首帧分配，开始合成视频", elem_classes="btn-success")
+
+                    # ── 结果展示区 ──────────────────────────────────────────────
+                    gr.HTML('<hr style="border-color:#e2e8f0;margin:16px 0;">')
+                    gr.HTML('<div class="card-header">🎉 生成结果</div>')
+                    with gr.Row():
+                        result_gallery = gr.Gallery(label="素材图片画廊", columns=3, height=260, scale=2)
+                        with gr.Column(scale=1):
+                            result_video  = gr.Video(label="最终生成视频（分镜片段）")
+                            result_audio  = gr.File(label="TTS 音频文件", file_count="multiple")
+                    result_cards  = gr.Gallery(label="模特模卡图", columns=3, height=200)
 
                 # ════════════════════════════════════════════════
-                #  事件处理：启动工作流
+                    #  事件处理：启动工作流
                 # ════════════════════════════════════════════════
 
-                def start_workflow(engine, duration, run_id,
-                                   pname, poffer, audience, pains):
-                    global _backend, _workflow_thread, _workflow_running
-                    global _workflow_result, _workflow_error, _log_lines, _pending_request
+                    def start_workflow(engine, duration, run_id,
+                                       pname, poffer, audience, pains):
+                        global _backend, _workflow_thread, _workflow_running
+                        global _workflow_result, _workflow_error, _log_lines, _pending_request
 
-                    if _workflow_running:
-                        return (
-                            gr.update(),  # log_box
-                            gr.HTML('<div class="badge-running">⏳ 已在运行中</div>'),
-                            gr.update(), gr.update(), gr.update(),  # 3 cp groups
-                            gr.update(), gr.update(), gr.update(), gr.update(),  # results
-                            gr.update(),  # json
+                        if _workflow_running:
+                            return (
+                                gr.update(),  # log_box
+                                gr.HTML('<div class="badge-running">⏳ 已在运行中</div>'),
+                                gr.update(), gr.update(), gr.update(),  # 3 cp groups
+                                gr.update(), gr.update(), gr.update(), gr.update(),  # results
+                                gr.update(),  # json
+                            )
+
+                        if not pname.strip():
+                            return (
+                                '⚠️ 请先在"产品信息"页面填写产品名称！',
+                                gr.HTML('<div class="badge-idle">⏸ 空闲</div>'),
+                                gr.update(), gr.update(), gr.update(),
+                                gr.update(), gr.update(), gr.update(), gr.update(),
+                                gr.update(),
+                            )
+
+                        # 设置引擎
+                        config.VIDEO_ENGINE = engine.lower()
+
+                        _backend         = GradioBackend()
+                        _workflow_result  = None
+                        _workflow_error   = None
+                        _log_lines        = [f"[{time.strftime('%H:%M:%S')}] 工作流启动，Run ID：{run_id or '（自动生成）'}"]
+                        _pending_request  = None
+                        _workflow_running = True
+
+                        kwargs = dict(
+                            product_name    = pname.strip(),
+                            product_offer   = poffer.strip(),
+                            target_audience = audience.strip(),
+                            pain_points     = pains.strip(),
+                            total_duration  = int(duration),
+                            run_id          = run_id.strip() or None,
                         )
 
-                    if not pname.strip():
+                        _workflow_thread = threading.Thread(
+                            target=_run_workflow_thread, args=(kwargs,), daemon=True
+                        )
+                        _workflow_thread.start()
+
                         return (
-                            '⚠️ 请先在"产品信息"页面填写产品名称！',
-                            gr.HTML('<div class="badge-idle">⏸ 空闲</div>'),
+                            "\n".join(_log_lines),
+                            gr.HTML('<div class="badge-running">⏳ 运行中…</div>'),
+                            gr.update(visible=False),
+                            gr.update(visible=False),
+                            gr.update(visible=False),
+                            gr.update(), gr.update(), gr.update(), gr.update(),
+                            {"status": "running", "run_id": run_id or "auto"},
+                        )
+
+                    run_btn.click(
+                        start_workflow,
+                        inputs=[engine_choice, total_duration, run_id_input,
+                                prod_name, prod_offer, target_audience, pain_points],
+                        outputs=[log_box, workflow_status,
+                                 cp1_group, cp2_group, cp3_group,
+                                 result_gallery, result_video, result_audio, result_cards,
+                                 json_output],
+                    )
+
+                # ════════════════════════════════════════════════
+                    #  定时轮询：刷新日志 + 检测交互请求
+                # ════════════════════════════════════════════════
+
+                    def _poll():
+                        """每 1.5s 执行一次，返回 UI 组件更新。"""
+                        global _pending_request, _log_lines, _workflow_running
+
+                        if _backend is None:
+                            return (
+                                gr.update(), gr.update(),
+                                gr.update(), gr.update(), gr.update(),
+                                gr.update(), gr.update(), gr.update(), gr.update(),
+                                gr.update(),
+                            )
+
+                        # 排空日志队列
+                        while True:
+                            try:
+                                item = _backend._out_q.get_nowait()
+                            except queue.Empty:
+                                break
+
+                            if item["type"] == "log":
+                                ts = time.strftime('%H:%M:%S')
+                                _log_lines.append(f"[{ts}] {item['text']}")
+                                # 只保留最近 200 行
+                                if len(_log_lines) > 200:
+                                    _log_lines = _log_lines[-200:]
+
+                            elif item["type"] in ("confirm", "prompt"):
+                                # 有交互请求 → 暂存，等待 UI 处理
+                                _pending_request = item
+                                # 根据 text 内容判断是哪个 Checkpoint
+                                text = item.get("text", "")
+
+                                if "图片是否满足需求" in text or "是否修改提示词" in text:
+                                    # CP1
+                                    state = _load_run_state(_get_current_run_id()) if _get_current_run_id() else {}
+                                    imgs  = state.get("image_paths") or state.get("image_urls") or []
+                                    fp    = state.get("feature_prompt", "")
+                                    _log_lines.append(f"[{time.strftime('%H:%M:%S')}] ⏸ 等待用户确认图片...")
+                                    return (
+                                        "\n".join(_log_lines[-80:]),
+                                        gr.HTML('<div class="badge-running">⏸ 等待图片确认…</div>'),
+                                        gr.update(visible=True),   # cp1
+                                        gr.update(visible=False),  # cp2
+                                        gr.update(visible=False),  # cp3
+                                        gr.update(value=imgs),     # gallery
+                                        gr.update(), gr.update(), gr.update(),
+                                        gr.update(),
+                                    )
+
+                                elif "是否对脚本进行微调" in text or "新台词" in text:
+                                    # CP2
+                                    state = _load_run_state(_get_current_run_id()) if _get_current_run_id() else {}
+                                    full_script = state.get("full_script", "")
+                                    scenes      = state.get("scenes", [])
+                                    table_data  = [[s.get("scene_id"), s.get("duration"), s.get("script", "")] for s in scenes]
+                                    _log_lines.append(f"[{time.strftime('%H:%M:%S')}] ⏸ 等待用户确认脚本...")
+                                    return (
+                                        "\n".join(_log_lines[-80:]),
+                                        gr.HTML('<div class="badge-running">⏸ 等待脚本确认…</div>'),
+                                        gr.update(visible=False),
+                                        gr.update(visible=True),   # cp2
+                                        gr.update(visible=False),
+                                        gr.update(),
+                                        gr.update(), gr.update(), gr.update(),
+                                        gr.update(value={"status": "waiting_script"}),
+                                    )
+
+                                elif "首帧" in text or "分镜" in text and "图片" in text:
+                                    # CP3
+                                    state = _load_run_state(_get_current_run_id()) if _get_current_run_id() else {}
+                                    imgs  = state.get("image_paths") or state.get("image_urls") or []
+                                    scenes= state.get("scenes", [])
+                                    table_data = [[s.get("scene_id"), s.get("duration"),
+                                                   s.get("script","")[:20]+"…", 1] for s in scenes]
+                                    _log_lines.append(f"[{time.strftime('%H:%M:%S')}] ⏸ 等待用户分配首帧图片...")
+                                    return (
+                                        "\n".join(_log_lines[-80:]),
+                                        gr.HTML('<div class="badge-running">⏸ 等待首帧分配…</div>'),
+                                        gr.update(visible=False),
+                                        gr.update(visible=False),
+                                        gr.update(visible=True),   # cp3
+                                        gr.update(),
+                                        gr.update(), gr.update(), gr.update(),
+                                        gr.update(value={"status": "waiting_scene_images"}),
+                                    )
+
+                        # 判断状态
+                        if not _workflow_running and _workflow_result is not None:
+                            state = _workflow_result
+                            imgs  = state.get("image_paths") or state.get("image_urls") or []
+                            # 取第一段视频
+                            vids  = [p for p in state.get("video_paths", []) if p and os.path.isfile(p)]
+                            auds  = [p for p in state.get("audio_paths", []) if p and os.path.isfile(p)]
+                            cards = state.get("card_paths") or []
+
+                            _log_lines.append(f"[{time.strftime('%H:%M:%S')}] ✅ 工作流完成！")
+                            return (
+                                "\n".join(_log_lines[-80:]),
+                                gr.HTML('<div class="badge-done">✅ 完成</div>'),
+                                gr.update(visible=False),
+                                gr.update(visible=False),
+                                gr.update(visible=False),
+                                gr.update(value=imgs),
+                                gr.update(value=vids[0] if vids else None),
+                                gr.update(value=auds if auds else None),
+                                gr.update(value=cards if cards else []),
+                                {"status": "completed",
+                                 "run_dir": state.get("run_dir", ""),
+                                 "total_scenes": state.get("total_scenes", 0)},
+                            )
+
+                        if not _workflow_running and _workflow_error:
+                            _log_lines.append(f"[{time.strftime('%H:%M:%S')}] ❌ 工作流出错：{_workflow_error[:200]}")
+                            return (
+                                "\n".join(_log_lines[-80:]),
+                                gr.HTML('<div class="badge-idle" style="background:#fee2e2;color:#dc2626;">❌ 出错</div>'),
+                                gr.update(visible=False), gr.update(visible=False), gr.update(visible=False),
+                                gr.update(), gr.update(), gr.update(), gr.update(),
+                                {"status": "error", "message": _workflow_error[:300]},
+                            )
+
+                        # 运行中，只刷新日志
+                        status_html = (
+                            '<div class="badge-running">⏳ 运行中…</div>'
+                            if _workflow_running
+                            else '<div class="badge-idle">⏸ 空闲</div>'
+                        )
+                        return (
+                            "\n".join(_log_lines[-80:]),
+                            gr.HTML(status_html),
                             gr.update(), gr.update(), gr.update(),
                             gr.update(), gr.update(), gr.update(), gr.update(),
                             gr.update(),
                         )
 
-                    # 设置引擎
-                    config.VIDEO_ENGINE = engine.lower()
-
-                    _backend         = GradioBackend()
-                    _workflow_result  = None
-                    _workflow_error   = None
-                    _log_lines        = [f"[{time.strftime('%H:%M:%S')}] 工作流启动，Run ID：{run_id or '（自动生成）'}"]
-                    _pending_request  = None
-                    _workflow_running = True
-
-                    kwargs = dict(
-                        product_name    = pname.strip(),
-                        product_offer   = poffer.strip(),
-                        target_audience = audience.strip(),
-                        pain_points     = pains.strip(),
-                        total_duration  = int(duration),
-                        run_id          = run_id.strip() or None,
+                    timer.tick(
+                        _poll,
+                        outputs=[log_box, workflow_status,
+                                 cp1_group, cp2_group, cp3_group,
+                                 result_gallery, result_video, result_audio, result_cards,
+                                 json_output],
                     )
 
-                    _workflow_thread = threading.Thread(
-                        target=_run_workflow_thread, args=(kwargs,), daemon=True
-                    )
-                    _workflow_thread.start()
-
-                    return (
-                        "\n".join(_log_lines),
-                        gr.HTML('<div class="badge-running">⏳ 运行中…</div>'),
-                        gr.update(visible=False),
-                        gr.update(visible=False),
-                        gr.update(visible=False),
-                        gr.update(), gr.update(), gr.update(), gr.update(),
-                        {"status": "running", "run_id": run_id or "auto"},
-                    )
-
-                run_btn.click(
-                    start_workflow,
-                    inputs=[engine_choice, total_duration, run_id_input,
-                            prod_name, prod_offer, target_audience, pain_points],
-                    outputs=[log_box, workflow_status,
-                             cp1_group, cp2_group, cp3_group,
-                             result_gallery, result_video, result_audio, result_cards,
-                             json_output],
-                )
-
                 # ════════════════════════════════════════════════
-                #  定时轮询：刷新日志 + 检测交互请求
+                    #  Checkpoint 按钮事件
                 # ════════════════════════════════════════════════
 
-                def _poll():
-                    """每 1.5s 执行一次，返回 UI 组件更新。"""
-                    global _pending_request, _log_lines, _workflow_running
+                    # --- CP1 确认 ---
+                    def cp1_confirm(new_prompt):
+                        global _pending_request
+                        if _backend is None:
+                            return gr.update(visible=True), "\n".join(_log_lines[-80:])
+                        # 先回答当前挂起的 confirm（图片满意吗？）
+                        _backend.reply(True)
+                        _pending_request = None
+                        ts = time.strftime('%H:%M:%S')
+                        _log_lines.append(f"[{ts}] ✅ 用户确认图片满意，继续...")
+                        return gr.update(visible=False), "\n".join(_log_lines[-80:])
 
-                    if _backend is None:
-                        return (
-                            gr.update(), gr.update(),
-                            gr.update(), gr.update(), gr.update(),
-                            gr.update(), gr.update(), gr.update(), gr.update(),
-                            gr.update(),
-                        )
+                    def cp1_redo(new_prompt):
+                        global _pending_request
+                        if _backend is None:
+                            return gr.update(visible=True), "\n".join(_log_lines[-80:])
+                        # 回答"不满意"→ 触发 interactive.confirm_images 内部 modify 流程
+                        _backend.reply(False)
+                        # 等待下一个 confirm（"是否修改提示词"）
+                        time.sleep(0.3)
+                        # 回答"是否修改提示词"
+                        if new_prompt and new_prompt.strip():
+                            _backend.reply(True)   # 修改提示词
+                            time.sleep(0.1)
+                            _backend.reply(new_prompt.strip())
+                        else:
+                            _backend.reply(False)  # 直接重新生成
+                        _pending_request = None
+                        ts = time.strftime('%H:%M:%S')
+                        _log_lines.append(f"[{ts}] 🔄 用户请求重新生图...")
+                        return gr.update(visible=False), "\n".join(_log_lines[-80:])
 
-                    # 排空日志队列
-                    while True:
-                        try:
-                            item = _backend._out_q.get_nowait()
-                        except queue.Empty:
-                            break
+                    cp1_ok_btn.click(cp1_confirm,   inputs=cp1_new_prompt, outputs=[cp1_group, log_box])
+                    cp1_redo_btn.click(cp1_redo,    inputs=cp1_new_prompt, outputs=[cp1_group, log_box])
 
-                        if item["type"] == "log":
-                            ts = time.strftime('%H:%M:%S')
-                            _log_lines.append(f"[{ts}] {item['text']}")
-                            # 只保留最近 200 行
-                            if len(_log_lines) > 200:
-                                _log_lines = _log_lines[-200:]
+                    # --- CP2 确认 ---
+                    def cp2_confirm(script_text, scenes_df):
+                        global _pending_request
+                        if _backend is None:
+                            return gr.update(visible=True), "\n".join(_log_lines[-80:])
+                        # 回答"是否微调" → False（直接确认，使用界面显示的脚本）
+                        # 若用户已修改 scenes_df，则用修改后的数据更新 state
+                        _backend.reply(False)
+                        _pending_request = None
+                        ts = time.strftime('%H:%M:%S')
+                        _log_lines.append(f"[{ts}] ✅ 用户确认脚本，开始视频生成...")
+                        return gr.update(visible=False), "\n".join(_log_lines[-80:])
 
-                        elif item["type"] in ("confirm", "prompt"):
-                            # 有交互请求 → 暂存，等待 UI 处理
-                            _pending_request = item
-                            # 根据 text 内容判断是哪个 Checkpoint
-                            text = item.get("text", "")
+                    def cp2_use_original(script_text, scenes_df):
+                        return cp2_confirm(script_text, scenes_df)
 
-                            if "图片是否满足需求" in text or "是否修改提示词" in text:
-                                # CP1
-                                state = _load_run_state(_get_current_run_id()) if _get_current_run_id() else {}
-                                imgs  = state.get("image_paths") or state.get("image_urls") or []
-                                fp    = state.get("feature_prompt", "")
-                                _log_lines.append(f"[{time.strftime('%H:%M:%S')}] ⏸ 等待用户确认图片...")
-                                return (
-                                    "\n".join(_log_lines[-80:]),
-                                    gr.HTML('<div class="badge-running">⏸ 等待图片确认…</div>'),
-                                    gr.update(visible=True),   # cp1
-                                    gr.update(visible=False),  # cp2
-                                    gr.update(visible=False),  # cp3
-                                    gr.update(value=imgs),     # gallery
-                                    gr.update(), gr.update(), gr.update(),
-                                    gr.update(),
-                                )
+                    cp2_ok_btn.click(cp2_confirm,      inputs=[cp2_script, cp2_scenes], outputs=[cp2_group, log_box])
+                    cp2_back_btn.click(cp2_use_original, inputs=[cp2_script, cp2_scenes], outputs=[cp2_group, log_box])
 
-                            elif "是否对脚本进行微调" in text or "新台词" in text:
-                                # CP2
-                                state = _load_run_state(_get_current_run_id()) if _get_current_run_id() else {}
-                                full_script = state.get("full_script", "")
-                                scenes      = state.get("scenes", [])
-                                table_data  = [[s.get("scene_id"), s.get("duration"), s.get("script", "")] for s in scenes]
-                                _log_lines.append(f"[{time.strftime('%H:%M:%S')}] ⏸ 等待用户确认脚本...")
-                                return (
-                                    "\n".join(_log_lines[-80:]),
-                                    gr.HTML('<div class="badge-running">⏸ 等待脚本确认…</div>'),
-                                    gr.update(visible=False),
-                                    gr.update(visible=True),   # cp2
-                                    gr.update(visible=False),
-                                    gr.update(),
-                                    gr.update(), gr.update(), gr.update(),
-                                    gr.update(value={"status": "waiting_script"}),
-                                )
+                    # --- CP3 确认 ---
+                    def cp3_confirm(scenes_data, use_same, same_idx):
+                        global _pending_request
+                        if _backend is None:
+                            return gr.update(visible=True), "\n".join(_log_lines[-80:])
 
-                            elif "首帧" in text or "分镜" in text and "图片" in text:
-                                # CP3
-                                state = _load_run_state(_get_current_run_id()) if _get_current_run_id() else {}
-                                imgs  = state.get("image_paths") or state.get("image_urls") or []
-                                scenes= state.get("scenes", [])
-                                table_data = [[s.get("scene_id"), s.get("duration"),
-                                               s.get("script","")[:20]+"…", 1] for s in scenes]
-                                _log_lines.append(f"[{time.strftime('%H:%M:%S')}] ⏸ 等待用户分配首帧图片...")
-                                return (
-                                    "\n".join(_log_lines[-80:]),
-                                    gr.HTML('<div class="badge-running">⏸ 等待首帧分配…</div>'),
-                                    gr.update(visible=False),
-                                    gr.update(visible=False),
-                                    gr.update(visible=True),   # cp3
-                                    gr.update(),
-                                    gr.update(), gr.update(), gr.update(),
-                                    gr.update(value={"status": "waiting_scene_images"}),
-                                )
+                        if use_same:
+                            _backend.reply(True)   # confirm "all same"
+                            time.sleep(0.1)
+                            _backend.reply(str(int(same_idx)))
+                        else:
+                            _backend.reply(False)  # per-scene
+                            if scenes_data is not None:
+                                for row in (scenes_data.values.tolist() if hasattr(scenes_data, 'values') else scenes_data):
+                                    idx_val = row[3] if len(row) > 3 else 1
+                                    time.sleep(0.05)
+                                    _backend.reply(str(int(idx_val or 1)))
 
-                    # 判断状态
-                    if not _workflow_running and _workflow_result is not None:
-                        state = _workflow_result
-                        imgs  = state.get("image_paths") or state.get("image_urls") or []
-                        # 取第一段视频
-                        vids  = [p for p in state.get("video_paths", []) if p and os.path.isfile(p)]
-                        auds  = [p for p in state.get("audio_paths", []) if p and os.path.isfile(p)]
-                        cards = state.get("card_paths") or []
+                        _pending_request = None
+                        ts = time.strftime('%H:%M:%S')
+                        _log_lines.append(f"[{ts}] ✅ 首帧图片分配已确认...")
+                        return gr.update(visible=False), "\n".join(_log_lines[-80:])
 
-                        _log_lines.append(f"[{time.strftime('%H:%M:%S')}] ✅ 工作流完成！")
-                        return (
-                            "\n".join(_log_lines[-80:]),
-                            gr.HTML('<div class="badge-done">✅ 完成</div>'),
-                            gr.update(visible=False),
-                            gr.update(visible=False),
-                            gr.update(visible=False),
-                            gr.update(value=imgs),
-                            gr.update(value=vids[0] if vids else None),
-                            gr.update(value=auds if auds else None),
-                            gr.update(value=cards if cards else []),
-                            {"status": "completed",
-                             "run_dir": state.get("run_dir", ""),
-                             "total_scenes": state.get("total_scenes", 0)},
-                        )
-
-                    if not _workflow_running and _workflow_error:
-                        _log_lines.append(f"[{time.strftime('%H:%M:%S')}] ❌ 工作流出错：{_workflow_error[:200]}")
-                        return (
-                            "\n".join(_log_lines[-80:]),
-                            gr.HTML('<div class="badge-idle" style="background:#fee2e2;color:#dc2626;">❌ 出错</div>'),
-                            gr.update(visible=False), gr.update(visible=False), gr.update(visible=False),
-                            gr.update(), gr.update(), gr.update(), gr.update(),
-                            {"status": "error", "message": _workflow_error[:300]},
-                        )
-
-                    # 运行中，只刷新日志
-                    status_html = (
-                        '<div class="badge-running">⏳ 运行中…</div>'
-                        if _workflow_running
-                        else '<div class="badge-idle">⏸ 空闲</div>'
-                    )
-                    return (
-                        "\n".join(_log_lines[-80:]),
-                        gr.HTML(status_html),
-                        gr.update(), gr.update(), gr.update(),
-                        gr.update(), gr.update(), gr.update(), gr.update(),
-                        gr.update(),
-                    )
-
-                timer.tick(
-                    _poll,
-                    outputs=[log_box, workflow_status,
-                             cp1_group, cp2_group, cp3_group,
-                             result_gallery, result_video, result_audio, result_cards,
-                             json_output],
-                )
+                    cp3_ok_btn.click(cp3_confirm,
+                                     inputs=[cp3_scenes_df, cp3_use_same, cp3_same_idx],
+                                     outputs=[cp3_group, log_box])
 
                 # ════════════════════════════════════════════════
-                #  Checkpoint 按钮事件
+                    #  停止按钮
                 # ════════════════════════════════════════════════
 
-                # --- CP1 确认 ---
-                def cp1_confirm(new_prompt):
-                    global _pending_request
-                    if _backend is None:
-                        return gr.update(visible=True), "\n".join(_log_lines[-80:])
-                    # 先回答当前挂起的 confirm（图片满意吗？）
-                    _backend.reply(True)
-                    _pending_request = None
-                    ts = time.strftime('%H:%M:%S')
-                    _log_lines.append(f"[{ts}] ✅ 用户确认图片满意，继续...")
-                    return gr.update(visible=False), "\n".join(_log_lines[-80:])
+                    def stop_workflow():
+                        global _workflow_running
+                        _workflow_running = False
+                        if _backend:
+                            try:
+                                _backend.reply(False)  # 解除可能存在的阻塞
+                            except Exception:
+                                pass
+                        ts = time.strftime('%H:%M:%S')
+                        _log_lines.append(f"[{ts}] ⏹ 用户请求停止（当前步骤执行完后停止）")
+                        return "\n".join(_log_lines[-80:]), gr.HTML('<div class="badge-idle">⏸ 已停止</div>')
 
-                def cp1_redo(new_prompt):
-                    global _pending_request
-                    if _backend is None:
-                        return gr.update(visible=True), "\n".join(_log_lines[-80:])
-                    # 回答"不满意"→ 触发 interactive.confirm_images 内部 modify 流程
-                    _backend.reply(False)
-                    # 等待下一个 confirm（"是否修改提示词"）
-                    time.sleep(0.3)
-                    # 回答"是否修改提示词"
-                    if new_prompt and new_prompt.strip():
-                        _backend.reply(True)   # 修改提示词
-                        time.sleep(0.1)
-                        _backend.reply(new_prompt.strip())
-                    else:
-                        _backend.reply(False)  # 直接重新生成
-                    _pending_request = None
-                    ts = time.strftime('%H:%M:%S')
-                    _log_lines.append(f"[{ts}] 🔄 用户请求重新生图...")
-                    return gr.update(visible=False), "\n".join(_log_lines[-80:])
+                    stop_btn.click(stop_workflow, outputs=[log_box, workflow_status])
 
-                cp1_ok_btn.click(cp1_confirm,   inputs=cp1_new_prompt, outputs=[cp1_group, log_box])
-                cp1_redo_btn.click(cp1_redo,    inputs=cp1_new_prompt, outputs=[cp1_group, log_box])
+                # ════════════════════════════════════════════════════
+                #  页面 5：提示词编辑
+                # ════════════════════════════════════════════════════
+                with gr.Group(visible=False) as page_prompt:
+                    gr.HTML('<div class="page-title"><h2>提示词编辑</h2><span>优化工作流中各环节的 AI 指令</span></div>')
 
-                # --- CP2 确认 ---
-                def cp2_confirm(script_text, scenes_df):
-                    global _pending_request
-                    if _backend is None:
-                        return gr.update(visible=True), "\n".join(_log_lines[-80:])
-                    # 回答"是否微调" → False（直接确认，使用界面显示的脚本）
-                    # 若用户已修改 scenes_df，则用修改后的数据更新 state
-                    _backend.reply(False)
-                    _pending_request = None
-                    ts = time.strftime('%H:%M:%S')
-                    _log_lines.append(f"[{ts}] ✅ 用户确认脚本，开始视频生成...")
-                    return gr.update(visible=False), "\n".join(_log_lines[-80:])
+                    with gr.Accordion("👤  1. 人物小传 (Story Maker)", open=True):
+                        gr.HTML('<div style="color:#64748b;font-size:12px;margin-bottom:8px;">根据产品信息生成目标用户画像，作为后续所有节点的输入。</div>')
+                        with gr.Row():
+                            story_sys  = gr.Textbox(label="System Prompt", value=cfg["story_sys"],  lines=5, elem_classes="font-mono bg-slate-50")
+                            story_user = gr.Textbox(label="User Prompt 模板", value=cfg["story_user"], lines=5, elem_classes="font-mono")
 
-                def cp2_use_original(script_text, scenes_df):
-                    return cp2_confirm(script_text, scenes_df)
+                    with gr.Accordion("🖼️  2. 生图特征提取 (Key Feature Extractor)", open=False):
+                        gr.HTML('<div style="color:#64748b;font-size:12px;margin-bottom:8px;">从人物小传提取可视化特征，转化为英文生图提示词。</div>')
+                        with gr.Row():
+                            feat_sys  = gr.Textbox(label="System Prompt", value=cfg["feat_sys"],  lines=5, elem_classes="font-mono bg-slate-50")
+                            feat_user = gr.Textbox(label="User Prompt 模板", value=cfg["feat_user"], lines=5, elem_classes="font-mono")
 
-                cp2_ok_btn.click(cp2_confirm,      inputs=[cp2_script, cp2_scenes], outputs=[cp2_group, log_box])
-                cp2_back_btn.click(cp2_use_original, inputs=[cp2_script, cp2_scenes], outputs=[cp2_group, log_box])
+                    with gr.Accordion("🎙️  3. 音色选择 (Voice Type Generator)", open=False):
+                        gr.HTML('<div style="color:#64748b;font-size:12px;margin-bottom:8px;">根据人物特征和产品类型选择最合适的 TTS 音色。</div>')
+                        with gr.Row():
+                            voice_sys  = gr.Textbox(label="System Prompt", value=cfg["voice_sys"],  lines=5, elem_classes="font-mono bg-slate-50")
+                            voice_user = gr.Textbox(label="User Prompt 模板", value=cfg["voice_user"], lines=5, elem_classes="font-mono")
 
-                # --- CP3 确认 ---
-                def cp3_confirm(scenes_data, use_same, same_idx):
-                    global _pending_request
-                    if _backend is None:
-                        return gr.update(visible=True), "\n".join(_log_lines[-80:])
+                    with gr.Accordion("📜  4. 口播脚本生成 (Script Generator)", open=False):
+                        gr.HTML('<div style="color:#64748b;font-size:12px;margin-bottom:8px;">生成分镜口播脚本，控制视频节奏和转化逻辑。</div>')
+                        with gr.Row():
+                            script_sys  = gr.Textbox(label="System Prompt", value=cfg["script_sys"],  lines=5, elem_classes="font-mono bg-slate-50")
+                            script_user = gr.Textbox(label="User Prompt 模板", value=cfg["script_user"], lines=5, elem_classes="font-mono")
 
-                    if use_same:
-                        _backend.reply(True)   # confirm "all same"
-                        time.sleep(0.1)
-                        _backend.reply(str(int(same_idx)))
-                    else:
-                        _backend.reply(False)  # per-scene
-                        if scenes_data is not None:
-                            for row in (scenes_data.values.tolist() if hasattr(scenes_data, 'values') else scenes_data):
-                                idx_val = row[3] if len(row) > 3 else 1
-                                time.sleep(0.05)
-                                _backend.reply(str(int(idx_val or 1)))
-
-                    _pending_request = None
-                    ts = time.strftime('%H:%M:%S')
-                    _log_lines.append(f"[{ts}] ✅ 首帧图片分配已确认...")
-                    return gr.update(visible=False), "\n".join(_log_lines[-80:])
-
-                cp3_ok_btn.click(cp3_confirm,
-                                 inputs=[cp3_scenes_df, cp3_use_same, cp3_same_idx],
-                                 outputs=[cp3_group, log_box])
-
-                # ════════════════════════════════════════════════
-                #  停止按钮
-                # ════════════════════════════════════════════════
-
-                def stop_workflow():
-                    global _workflow_running
-                    _workflow_running = False
-                    if _backend:
-                        try:
-                            _backend.reply(False)  # 解除可能存在的阻塞
-                        except Exception:
-                            pass
-                    ts = time.strftime('%H:%M:%S')
-                    _log_lines.append(f"[{ts}] ⏹ 用户请求停止（当前步骤执行完后停止）")
-                    return "\n".join(_log_lines[-80:]), gr.HTML('<div class="badge-idle">⏸ 已停止</div>')
-
-                stop_btn.click(stop_workflow, outputs=[log_box, workflow_status])
-
-            # ════════════════════════════════════════════════════
-            #  页面 5：提示词编辑
-            # ════════════════════════════════════════════════════
-            with gr.TabItem("✏️  提示词编辑"):
-                gr.HTML('<div class="page-title"><h2>提示词编辑</h2><span>优化工作流中各环节的 AI 指令</span></div>')
-
-                with gr.Accordion("👤  1. 人物小传 (Story Maker)", open=True):
-                    gr.HTML('<div style="color:#64748b;font-size:12px;margin-bottom:8px;">根据产品信息生成目标用户画像，作为后续所有节点的输入。</div>')
                     with gr.Row():
-                        story_sys  = gr.Textbox(label="System Prompt", value=cfg["story_sys"],  lines=5, elem_classes="font-mono bg-slate-50")
-                        story_user = gr.Textbox(label="User Prompt 模板", value=cfg["story_user"], lines=5, elem_classes="font-mono")
+                        prompt_save_btn = gr.Button("💾  保存提示词", elem_classes="btn-primary")
+                        prompt_reset_btn = gr.Button("↩️  恢复默认值", elem_classes="btn-secondary")
+                        prompt_status   = gr.Textbox(label="", value="等待保存...", interactive=False, show_label=False, scale=3)
 
-                with gr.Accordion("🖼️  2. 生图特征提取 (Key Feature Extractor)", open=False):
-                    gr.HTML('<div style="color:#64748b;font-size:12px;margin-bottom:8px;">从人物小传提取可视化特征，转化为英文生图提示词。</div>')
-                    with gr.Row():
-                        feat_sys  = gr.Textbox(label="System Prompt", value=cfg["feat_sys"],  lines=5, elem_classes="font-mono bg-slate-50")
-                        feat_user = gr.Textbox(label="User Prompt 模板", value=cfg["feat_user"], lines=5, elem_classes="font-mono")
+                    def _save_prompts(ss, su, fs, fu, vs, vu, scs, scu):
+                        msg = apply_prompts(ss, su, fs, fu, vs, vu, scs, scu)
+                        return f"✅ {msg}（{time.strftime('%H:%M:%S')}）"
 
-                with gr.Accordion("🎙️  3. 音色选择 (Voice Type Generator)", open=False):
-                    gr.HTML('<div style="color:#64748b;font-size:12px;margin-bottom:8px;">根据人物特征和产品类型选择最合适的 TTS 音色。</div>')
-                    with gr.Row():
-                        voice_sys  = gr.Textbox(label="System Prompt", value=cfg["voice_sys"],  lines=5, elem_classes="font-mono bg-slate-50")
-                        voice_user = gr.Textbox(label="User Prompt 模板", value=cfg["voice_user"], lines=5, elem_classes="font-mono")
+                    prompt_save_btn.click(
+                        _save_prompts,
+                        inputs=[story_sys, story_user, feat_sys, feat_user,
+                                voice_sys, voice_user, script_sys, script_user],
+                        outputs=prompt_status,
+                    )
 
-                with gr.Accordion("📜  4. 口播脚本生成 (Script Generator)", open=False):
-                    gr.HTML('<div style="color:#64748b;font-size:12px;margin-bottom:8px;">生成分镜口播脚本，控制视频节奏和转化逻辑。</div>')
-                    with gr.Row():
-                        script_sys  = gr.Textbox(label="System Prompt", value=cfg["script_sys"],  lines=5, elem_classes="font-mono bg-slate-50")
-                        script_user = gr.Textbox(label="User Prompt 模板", value=cfg["script_user"], lines=5, elem_classes="font-mono")
+                    def _reset_prompts():
+                        import importlib
+                        import prompts_config as pc
+                        importlib.reload(pc)
+                        return (pc.STORY_MAKER_SYSTEM, pc.STORY_MAKER_USER,
+                                pc.KEY_FEATURE_SYSTEM, pc.KEY_FEATURE_USER,
+                                pc.VOICE_TYPE_SYSTEM,  pc.VOICE_TYPE_USER,
+                                pc.SCRIPT_GENERATOR_SYSTEM, pc.SCRIPT_GENERATOR_USER,
+                                "✅ 已从文件重新加载默认提示词")
 
-                with gr.Row():
-                    prompt_save_btn = gr.Button("💾  保存提示词", elem_classes="btn-primary")
-                    prompt_reset_btn = gr.Button("↩️  恢复默认值", elem_classes="btn-secondary")
-                    prompt_status   = gr.Textbox(label="", value="等待保存...", interactive=False, show_label=False, scale=3)
+                    prompt_reset_btn.click(
+                        _reset_prompts,
+                        outputs=[story_sys, story_user, feat_sys, feat_user,
+                                 voice_sys, voice_user, script_sys, script_user,
+                                 prompt_status],
+                    )
 
-                def _save_prompts(ss, su, fs, fu, vs, vu, scs, scu):
-                    msg = apply_prompts(ss, su, fs, fu, vs, vu, scs, scu)
-                    return f"✅ {msg}（{time.strftime('%H:%M:%S')}）"
+        # ── 导航切换逻辑 ──
+        def _switch_tab(tab_name):
+            btns = [
+                gr.update(elem_classes="nav-btn selected" if tab_name == "api" else "nav-btn"),
+                gr.update(elem_classes="nav-btn selected" if tab_name == "prod" else "nav-btn"),
+                gr.update(elem_classes="nav-btn selected" if tab_name == "param" else "nav-btn"),
+                gr.update(elem_classes="nav-btn selected" if tab_name == "run" else "nav-btn"),
+                gr.update(elem_classes="nav-btn selected" if tab_name == "prompt" else "nav-btn"),
+            ]
+            pages = [
+                gr.update(visible=(tab_name == "api")),
+                gr.update(visible=(tab_name == "prod")),
+                gr.update(visible=(tab_name == "param")),
+                gr.update(visible=(tab_name == "run")),
+                gr.update(visible=(tab_name == "prompt")),
+            ]
+            return tuple(btns + pages)
 
-                prompt_save_btn.click(
-                    _save_prompts,
-                    inputs=[story_sys, story_user, feat_sys, feat_user,
-                            voice_sys, voice_user, script_sys, script_user],
-                    outputs=prompt_status,
-                )
-
-                def _reset_prompts():
-                    import importlib
-                    import prompts_config as pc
-                    importlib.reload(pc)
-                    return (pc.STORY_MAKER_SYSTEM, pc.STORY_MAKER_USER,
-                            pc.KEY_FEATURE_SYSTEM, pc.KEY_FEATURE_USER,
-                            pc.VOICE_TYPE_SYSTEM,  pc.VOICE_TYPE_USER,
-                            pc.SCRIPT_GENERATOR_SYSTEM, pc.SCRIPT_GENERATOR_USER,
-                            "✅ 已从文件重新加载默认提示词")
-
-                prompt_reset_btn.click(
-                    _reset_prompts,
-                    outputs=[story_sys, story_user, feat_sys, feat_user,
-                             voice_sys, voice_user, script_sys, script_user,
-                             prompt_status],
-                )
+        nav_outputs = [nav_api, nav_prod, nav_param, nav_run, nav_prompt, 
+                       page_api, page_prod, page_param, page_run, page_prompt]
+        
+        nav_api.click(lambda: _switch_tab("api"), outputs=nav_outputs)
+        nav_prod.click(lambda: _switch_tab("prod"), outputs=nav_outputs)
+        nav_param.click(lambda: _switch_tab("param"), outputs=nav_outputs)
+        nav_run.click(lambda: _switch_tab("run"), outputs=nav_outputs)
+        nav_prompt.click(lambda: _switch_tab("prompt"), outputs=nav_outputs)
 
     return demo
 
@@ -1282,4 +1353,5 @@ if __name__ == "__main__":
         server_port=7860,
         inbrowser=True,
         share=False,
+        allowed_paths=[config.OUTPUT_DIR]
     )
