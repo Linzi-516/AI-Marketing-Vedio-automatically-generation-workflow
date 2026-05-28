@@ -8,8 +8,8 @@
 
 import json
 import re
-from openai import OpenAI
 import config
+from clients.llm_client import chat_completion
 try:
     import prompts_config as _pc
 except ImportError:
@@ -99,11 +99,6 @@ def run(story: str, total_duration: int = 30) -> dict:
             "estimated_duration": int,
         }
     """
-    client = OpenAI(
-        api_key=config.QWEN_API_KEY,
-        base_url=config.QWEN_BASE_URL,
-    )
-
     sys_prompt = (getattr(_pc, "SCRIPT_GENERATOR_SYSTEM", None) or SYSTEM_PROMPT) if _pc else SYSTEM_PROMPT
     user_tmpl  = (getattr(_pc, "SCRIPT_GENERATOR_USER",   None) or USER_PROMPT_TEMPLATE) if _pc else USER_PROMPT_TEMPLATE
 
@@ -116,16 +111,11 @@ def run(story: str, total_duration: int = 30) -> dict:
 
     print(f"[Script Generator] 正在生成口播脚本（目标时长 {total_duration}s）...")
 
-    response = client.chat.completions.create(
-        model=config.QWEN_MODEL,
-        messages=[
-            {"role": "system", "content": sys_prompt},
-            {"role": "user",   "content": user_message},
-        ],
+    raw_text = chat_completion(
+        system_prompt=sys_prompt,
+        user_prompt=user_message,
         temperature=0.7,
     )
-
-    raw_text = (response.choices[0].message.content or "").strip()
 
     script_data = _extract_json(raw_text)
 

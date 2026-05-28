@@ -34,9 +34,19 @@ def _save_state(run_dir: str, state: dict):
 def _load_state(run_dir: str) -> dict:
     path = os.path.join(run_dir, "state.json")
     if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8-sig") as f:
             return json.load(f)
     return {}
+
+
+def _valid_paths(paths: list) -> list:
+    return [p for p in paths or [] if p and os.path.exists(p)]
+
+
+def _raise_if_failed(result: dict, failed_key: str, label: str):
+    failed = result.get(failed_key, [])
+    if failed:
+        raise RuntimeError(f"{label} 失败，失败索引/分镜: {failed}")
 
 
 # ── 子链路：并行图像链路（特征提取 → 音色+生图） ──────────────────────────────
@@ -137,7 +147,7 @@ def run(
         total_duration:   视频总时长（秒）
         run_id:           本次运行ID（留空自动生成），可传入已有ID实现断点续跑
         io_backend:       I/O 后端实例，None 则使用全局默认（CLIBackend）
-                          前端集成时传入 GradioBackend 等自定义实现
+                          可传入自定义 IOBackend 实现
 
     Returns:
         state dict，包含各节点输出
@@ -158,6 +168,15 @@ def run(
     io.display(f"{'='*60}\n")
 
     state = _load_state(run_dir)
+    state.setdefault("_request", {
+        "run_id": run_id,
+        "product_name": product_name,
+        "product_offer": product_offer,
+        "target_audience": target_audience,
+        "pain_points": pain_points,
+        "total_duration": total_duration,
+    })
+    _save_state(run_dir, state)
 
     # ── Step 1: Story Maker ────────────────────────────────────────────────────
     if "story" not in state:
@@ -249,7 +268,7 @@ def run(
     engine = config.VIDEO_ENGINE.lower()
     video_done = "video_paths" in state
     card_done  = "card_paths"  in state
-    tts_done   = "audio_paths" in state
+    tts_done   = bool(_valid_paths(state.get("audio_paths", [])))
 
     def card_chain():
         """模卡图生成链路（所有引擎均并行执行）"""
@@ -259,8 +278,7 @@ def run(
 
         image_paths = [p for p in state.get("image_paths", []) if p and os.path.exists(p)]
         if not image_paths:
-            print("[Step 5-B 跳过] 模特图片不存在，跳过模卡图生成")
-            return
+            raise RuntimeError("模特图片不存在，无法继续生成模卡图。请检查 image_paths。")
 
         model_image_path = image_paths[0]
         silhouette_paths = config.MODELCARD_SILHOUETTE_PATHS
@@ -274,6 +292,7 @@ def run(
         state["card_paths"] = card_result["card_paths"]
         state["card_failed_indices"] = card_result["failed_indices"]
         _save_state(run_dir, state)
+        _raise_if_failed(card_result, "failed_indices", "模卡图生成")
         print(f"\n[Step 5-B 完成] 模卡图生成完毕\n")
 
     if engine == "omni":
@@ -296,12 +315,13 @@ def run(
             state["tts_failed_indices"] = tts_result["failed_indices"]
             _save_state(run_dir, state)
             success_count = sum(1 for p in tts_result["audio_paths"] if p)
+            _raise_if_failed(tts_result, "failed_indices", "TTS 音频生成")
             print(f"\n[Step 5-C 完成] TTS 音频生成完毕（{success_count}/{len(state['scenes'])} 段成功）\n")
 
         # ══════════════════════════════════════════════════════════════════════
         #  CHECKPOINT 3（Omni 专用）：每段分镜首帧图片选择
         #  用户为每段分镜独立指定首帧人物图片
-        #  CLI 模式：输入序号/路径/URL；前端模式：替换为拖拽/点击选择
+        #  CLI 模式：输入序号/路径/URL；自定义 I/O 可替换为拖拽/点击选择
         # ══════════════════════════════════════════════════════════════════════
         if not state.get("_scene_images_confirmed", False):
             scene_image_selections = interactive.select_scene_images(
@@ -371,6 +391,7 @@ def run(
             state["video_urls"]    = vid_result.get("video_urls", [])
             state["failed_scenes"] = vid_result["failed_scenes"]
             _save_state(run_dir, state)
+            _raise_if_failed(vid_result, "failed_scenes", "Omni 视频生成")
             print(f"\n[Step 5-A 完成] Omni 视频片段生成完毕\n")
 
         print("[并行执行] OmniHuman 视频生成 + 模卡图生成同步启动...")
@@ -413,6 +434,7 @@ def run(
             state["video_urls"]    = vid_result.get("video_urls", [])
             state["failed_scenes"] = vid_result["failed_scenes"]
             _save_state(run_dir, state)
+            _raise_if_failed(vid_result, "failed_scenes", "视频生成")
             print(f"\n[Step 5-A 完成] 视频片段生成完毕\n")
 
         def tts_chain():
@@ -431,6 +453,7 @@ def run(
             state["tts_failed_indices"] = tts_result["failed_indices"]
             _save_state(run_dir, state)
             success_count = sum(1 for p in tts_result["audio_paths"] if p)
+            _raise_if_failed(tts_result, "failed_indices", "TTS 音频生成")
             print(f"\n[Step 5-C 完成] TTS 音频生成完毕（{success_count}/{len(state['scenes'])} 段成功）\n")
 
         print("[并行执行] 视频生成 + 模卡图生成 + TTS 音频同步启动...")

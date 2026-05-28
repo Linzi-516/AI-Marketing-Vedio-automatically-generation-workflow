@@ -3,8 +3,7 @@
 输入人物小传 → 调用千问 → 输出结构化生图提示词
 """
 
-from openai import OpenAI
-import config
+from clients.llm_client import chat_completion
 try:
     import prompts_config as _pc
 except ImportError:
@@ -49,11 +48,6 @@ def run(story: str) -> dict:
             "feature_prompt": str,  # 英文人物特征提示词
         }
     """
-    client = OpenAI(
-        api_key=config.QWEN_API_KEY,
-        base_url=config.QWEN_BASE_URL,
-    )
-
     sys_prompt = (getattr(_pc, "KEY_FEATURE_SYSTEM", None) or SYSTEM_PROMPT) if _pc else SYSTEM_PROMPT
     user_tmpl  = (getattr(_pc, "KEY_FEATURE_USER",   None) or USER_PROMPT_TEMPLATE) if _pc else USER_PROMPT_TEMPLATE
 
@@ -61,16 +55,11 @@ def run(story: str) -> dict:
 
     print("[Key Feature Extractor] 正在提取人物视觉特征...")
 
-    response = client.chat.completions.create(
-        model=config.QWEN_MODEL,
-        messages=[
-            {"role": "system", "content": sys_prompt},
-            {"role": "user",   "content": user_message},
-        ],
+    feature_prompt = chat_completion(
+        system_prompt=sys_prompt,
+        user_prompt=user_message,
         temperature=0.3,
     )
-
-    feature_prompt = response.choices[0].message.content.strip()
 
     print(f"[Key Feature Extractor] 特征提取完成：{feature_prompt[:80]}...")
     return {

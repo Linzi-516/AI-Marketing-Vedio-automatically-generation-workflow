@@ -3,8 +3,7 @@
 输入产品信息 → 调用千问 → 输出4模块人物小传
 """
 
-from openai import OpenAI
-import config
+from clients.llm_client import chat_completion
 try:
     import prompts_config as _pc
 except ImportError:
@@ -52,11 +51,6 @@ def run(product_name: str, product_offer: str, target_audience: str, pain_points
             "raw_response": str   # 原始 LLM 响应
         }
     """
-    client = OpenAI(
-        api_key=config.QWEN_API_KEY,
-        base_url=config.QWEN_BASE_URL,
-    )
-
     sys_prompt  = (getattr(_pc, "STORY_MAKER_SYSTEM", None) or SYSTEM_PROMPT) if _pc else SYSTEM_PROMPT
     user_tmpl   = (getattr(_pc, "STORY_MAKER_USER",   None) or USER_PROMPT_TEMPLATE) if _pc else USER_PROMPT_TEMPLATE
 
@@ -69,16 +63,11 @@ def run(product_name: str, product_offer: str, target_audience: str, pain_points
 
     print("[Story Maker] 正在生成人物小传...")
 
-    response = client.chat.completions.create(
-        model=config.QWEN_MODEL,
-        messages=[
-            {"role": "system", "content": sys_prompt},
-            {"role": "user",   "content": user_message},
-        ],
+    story_text = chat_completion(
+        system_prompt=sys_prompt,
+        user_prompt=user_message,
         temperature=0.8,
     )
-
-    story_text = response.choices[0].message.content.strip()
 
     print("[Story Maker] 人物小传生成完成。")
     return {

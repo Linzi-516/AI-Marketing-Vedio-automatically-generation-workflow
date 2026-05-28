@@ -7,8 +7,8 @@
 职责：仅做音色决策，不参与脚本创作，确保音色与人物形象保持一致。
 """
 
-from openai import OpenAI
 import config
+from clients.llm_client import chat_completion
 try:
     import prompts_config as _pc
 except ImportError:
@@ -94,11 +94,6 @@ def run(feature_prompt: str, story: str) -> dict:
             "voice_type": str,   # 音色代码，如 "BV402_streaming"
         }
     """
-    client = OpenAI(
-        api_key=config.QWEN_API_KEY,
-        base_url=config.QWEN_BASE_URL,
-    )
-
     sys_prompt = (getattr(_pc, "VOICE_TYPE_SYSTEM", None) or SYSTEM_PROMPT) if _pc else SYSTEM_PROMPT
     user_tmpl  = (getattr(_pc, "VOICE_TYPE_USER",   None) or USER_PROMPT_TEMPLATE) if _pc else USER_PROMPT_TEMPLATE
 
@@ -109,16 +104,11 @@ def run(feature_prompt: str, story: str) -> dict:
 
     print("[Voice Type Generator] 正在根据人物特征选择音色...")
 
-    response = client.chat.completions.create(
-        model=config.QWEN_MODEL,
-        messages=[
-            {"role": "system", "content": sys_prompt},
-            {"role": "user",   "content": user_message},
-        ],
+    raw = chat_completion(
+        system_prompt=sys_prompt,
+        user_prompt=user_message,
         temperature=0.1,   # 低温度，保证输出稳定性
     )
-
-    raw = (response.choices[0].message.content or "").strip()
 
     # 清理多余内容，只保留音色编码（形如 BV\d+\w*_streaming）
     import re

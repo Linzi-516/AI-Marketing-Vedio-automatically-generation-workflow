@@ -3,18 +3,17 @@
 
 设计原则：
   - 所有需要人工干预的节点通过此模块暴露统一接口
-  - 后端逻辑与 I/O 完全解耦：CLI 模式直接使用 input()；
-    前端模式（Gradio / Web）可通过注册自定义 handler 替换
-  - 每个交互点均有明确的返回契约，方便前端按约定接入
+  - 后端逻辑与 I/O 完全解耦：默认 CLI 模式直接使用 input()
+  - 每个交互点均有明确的返回契约，方便后续按需接入其他 I/O backend
 
 接口约定：
   所有公开函数均接受可选的 io_backend 参数，类型为 IOBackend 子类实例。
   若不传则使用全局默认 backend（默认为 CLIBackend）。
 
-前端集成方式（未来）：
-  1. 实现一个继承 IOBackend 的 GradioBackend，将输入/输出映射到 Gradio 组件
-  2. 在 app.py 中调用 interactive.set_global_backend(GradioBackend(...))
-  3. workflow.py 中所有 interactive 调用保持不变，自动走前端交互
+扩展方式：
+  1. 实现一个继承 IOBackend 的自定义 backend
+  2. 调用 interactive.set_global_backend(...) 或在 workflow.run 中传入 io_backend
+  3. workflow.py 中所有 interactive 调用保持不变
 """
 
 import os
@@ -28,7 +27,7 @@ from typing import Optional
 # ══════════════════════════════════════════════════════════════
 
 class IOBackend(ABC):
-    """I/O 后端抽象基类，前端集成时继承此类并实现对应方法"""
+    """I/O 后端抽象基类，自定义交互实现可继承此类。"""
 
     @abstractmethod
     def display(self, message: str) -> None:
@@ -70,7 +69,7 @@ _global_backend: IOBackend = CLIBackend()
 
 
 def set_global_backend(backend: IOBackend) -> None:
-    """替换全局 I/O backend（前端集成时调用）"""
+    """替换全局 I/O backend。"""
     global _global_backend
     _global_backend = backend
 
@@ -107,6 +106,12 @@ def confirm_images(
         }
     """
     io = _get_backend(backend)
+    if hasattr(io, "confirm_images"):
+        return io.confirm_images(
+            image_paths=image_paths,
+            feature_prompt=feature_prompt,
+            run_dir=run_dir,
+        )
 
     io.display("\n" + "═" * 60)
     io.display("  【生图完成】请查看以下图片，确认是否满意")
@@ -171,6 +176,8 @@ def confirm_script(
         }
     """
     io = _get_backend(backend)
+    if hasattr(io, "confirm_script"):
+        return io.confirm_script(full_script=full_script, scenes=scenes)
 
     io.display("\n" + "═" * 60)
     io.display("  【脚本生成完成】请审阅以下脚本，确认是否需要微调")
@@ -231,10 +238,9 @@ def select_scene_images(
     """
     让用户为每段分镜选择首帧图片（Omni 引擎专用）。
 
-    设计说明（前后端解耦）：
+    设计说明（I/O 解耦）：
       - CLI 模式：展示图片路径列表，用户输入序号或直接粘贴路径/URL
-      - 前端模式（未来）：GradioBackend 可将此调用映射为图片选择组件
-        （如拖拽选取），返回格式完全相同
+      - 自定义 backend 可将此调用映射为其他图片选择组件，返回格式完全相同
       - 若用户对所有分镜均选相同图片，可输入单个序号快速填充
 
     Args:
@@ -252,6 +258,12 @@ def select_scene_images(
         }
     """
     io = _get_backend(backend)
+    if hasattr(io, "select_scene_images"):
+        return io.select_scene_images(
+            scenes=scenes,
+            available_image_paths=available_image_paths,
+            available_image_urls=available_image_urls,
+        )
 
     io.display("\n" + "═" * 60)
     io.display("  【首帧图片选择】为每段分镜选择首帧人物图片")
@@ -382,7 +394,7 @@ def _ask_for_public_url(io: IOBackend, local_path: str) -> str:
       2. 上传到阿里云 OSS / 腾讯云 COS 等任意对象存储
       3. 上传到图床（如 sm.ms、imgur）获取直链
 
-    前端集成时此函数可替换为自动上传逻辑（GradioBackend 覆盖此行为）。
+    接入自定义 I/O 时，此函数可替换为自动上传逻辑。
     """
     filename = os.path.basename(local_path) if local_path else "（未知文件）"
     io.display(f"\n  ⚠  图片 [{filename}] 没有公网 URL。")

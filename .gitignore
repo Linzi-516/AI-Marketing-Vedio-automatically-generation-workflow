@@ -18,6 +18,14 @@ ENV/
 # Output (generated files)
 output/
 
+# Frontend
+frontend/node_modules/
+frontend/dist/
+*.tsbuildinfo
+
+# Local portable toolchains
+tools/node/
+
 # IDE
 .vscode/
 .idea/
@@ -30,3 +38,9 @@ Thumbs.db
 # Secrets (just in case)
 *.env
 .env
+.env.*
+!.env.example
+config.local.py
+*.pem
+*.key
+*.crt

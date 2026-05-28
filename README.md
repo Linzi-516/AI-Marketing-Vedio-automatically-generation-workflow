@@ -58,17 +58,15 @@
 
 ---
 
-## V4 版本主要更新特性
+## 当前版本主要特性
 
-- **全新 Gradio 图形化界面 (Web UI)**：实现了全功能的图形化控制台。
-    - **深色侧边栏导航**：采用专业设计语言，左侧竖向导航栏集成 Logo 区与功能菜单。
-    - **五大功能模块**：API 配置（卡片式）、产品信息输入、详细参数配置、引擎运行控制、提示词在线编辑。
-    - **可视化交互 Checkpoints**：
-        - **生图确认**：实时预览人物图，支持修改提示词重绘。
-        - **脚本微调**：内置表格编辑器，可直接修改分镜台词。
-        - **首帧分配**：Omni 模式专用，支持为分镜灵活指定图片序号。
-    - **实时日志终端**：UI 内部嵌虚拟终端，同步输出后台运行日志，支持运行状态实时刷新。
-- **UI 与工作流深度解耦**：通过 `GradioBackend` 类适配 `interactive` 抽象接口，实现同一套逻辑在 CLI 和 Web UI 下的无缝切换。
+- **后端工作流独立运行**：以 `workflow.py` 为主控制器，`main.py` 为命令行入口，不依赖 Web 前端即可完成完整生成链路。
+- **多节点 AIGC 编排**：串联人物小传、视觉特征、人物图、口播脚本、TTS、视频生成和模卡图生成节点。
+- **交互式 Checkpoints**：
+    - **生图确认**：查看人物图，支持修改提示词重绘。
+    - **脚本微调**：进入视频生成前确认或调整分镜台词。
+    - **首帧分配**：Omni 模式下为每段分镜指定图片序号或公网 URL。
+- **断点续跑**：每个关键步骤写入 `state.json`，重复运行同一 `run_id` 时自动跳过已完成节点。
 
 ---
 
@@ -79,43 +77,77 @@
 pip install -r requirements.txt
 ```
 
-### 2. 启动图形化界面
-```bash
-python app.py
-```
-程序启动后会自动在浏览器打开 `http://127.0.0.1:7860`。
-
+### 2. 启动命令行工作流
 ```bash
 python main.py
 ```
-可在后台直接运行，该方法更加稳健。
+
+### 2.1 启动内部工具 API
+```bash
+uvicorn api_server:app --host 127.0.0.1 --port 8000
+```
+API 采用异步任务模式，前端通过 `/api/runs` 创建任务、轮询状态，并在 Checkpoint 处提交确认结果。
+
+### 2.2 启动内部工具前端
+```bash
+cd frontend
+npm install
+npm run dev
+```
+前端默认运行在 `http://127.0.0.1:5173`，并通过 Vite proxy 将 `/api` 转发到 `http://127.0.0.1:8000`。
+
+### 2.3 一键启动内部工具
+
+Windows PowerShell：
+
+```powershell
+.\scripts\start_dev.ps1
+```
+
+首次安装或需要重装前端依赖时：
+
+```powershell
+.\scripts\start_dev.ps1 -InstallDeps
+```
+
+一键脚本会同时启动：
+
+- 后端 API：`http://127.0.0.1:8000`
+- 前端页面：`http://127.0.0.1:5173`
+
+配置状态检测规划见 `docs/config_status_plan.md`。第一版建议只检测 Key 是否已配置，不在前端展示明文 Key。
 
 ### 3. 配置 API Key 及路径
-您可以在 Web UI 的 **"⚙️ API 配置"** 页面直接填入并保存配置，或手动编辑 `config.py`：
+不要把真实 API Key 写进 `config.py`。本项目从 `.env` 读取本地配置，仓库只保留 `.env.example` 模板。
 
 | 配置项 | 说明 | 获取地址 |
 |--------|------|----------|
 | `QWEN_API_KEY` | 阿里云千问 API Key | [阿里云百炼平台](https://bailian.console.aliyun.com/) |
-| `JIMENG_API_KEY` | 火山引擎 Access Key ID | [火山引擎控制台 IAM](https://console.volcengine.com/iam/keymanage) |
-| `JIMENG_API_SECRET` | 火山引擎 Secret Access Key | 同上 |
+| `JIMENG_Access_Key_ID` | 火山引擎 Access Key ID | [火山引擎控制台 IAM](https://console.volcengine.com/iam/keymanage) |
+| `JIMENG_SECRET_Acess_Key` | 火山引擎 Secret Access Key | 同上 |
 | `TTS_APP_ID` | 语音合成应用的 APP ID | [语音技术控制台 → 应用管理](https://console.volcengine.com/speech/app) |
 | `TTS_ACCESS_TOKEN` | 语音合成应用的 Access Token | 同上（点击应用名称进入详情页获取） |
 | `TOS_BUCKET` | 火山引擎 TOS 存储桶名称 | [对象存储 TOS 控制台](https://console.volcengine.com/tos)（需设为公共读） |
 | `OUTPUT_DIR` | 本地输出目录（绝对路径） | 自定义 |
 | `MODELCARD_SILHOUETTE_PATHS` | 3张灰底姿势剪影图路径列表 | 本地准备 |
 
+当前前端配置页只做状态检测，不提供 API Key 写入能力。配置步骤如下：
+
+1. 复制 `.env.example` 为 `.env`。
+2. 在 `.env` 中填写 `QWEN_API_KEY`、即梦/火山引擎 Access Key ID、Secret Access Key、`TTS_APP_ID`、`TTS_ACCESS_TOKEN`。
+3. 将 `TOS_BUCKET` 改成真实桶名，并确认桶为公共读或可生成公网可访问 URL。
+4. 将 `OUTPUT_DIR` 改成本机可写的输出目录。
+5. 将 `MODELCARD_SILHOUETTE_PATHS` 改成 3 张本地剪影图的绝对路径，用英文分号 `;` 分隔。
+6. 重启后端 API 服务，再刷新前端配置页查看状态。
+
 **模特模卡图剪影配置示例：**
-```python
-MODELCARD_SILHOUETTE_PATHS = [
-    r"C:\silhouettes\pose_front.png",   # 姿势1（站姿正面）
-    r"C:\silhouettes\pose_side.png",    # 姿势2（站姿侧面）
-    r"C:\silhouettes\pose_walk.png",    # 姿势3（行走姿势）
-]
+```env
+MODELCARD_SILHOUETTE_PATHS=C:\silhouettes\pose_front.png;C:\silhouettes\pose_side.png;C:\silhouettes\pose_walk.png
 ```
 
 ### 3. 选择视频生成引擎
 
-在 `config.py` 中设置 `VIDEO_ENGINE`：
+在 `.env` 中设置 `VIDEO_ENGINE`：
 
 | 值 | 引擎 | 说明 |
 |----|------|------|
@@ -125,7 +157,7 @@ MODELCARD_SILHOUETTE_PATHS = [
 
 **omni 模式额外前置配置：**
 1. 在[语音技术控制台](https://console.volcengine.com/speech/app)创建应用，挂载"大模型语音合成"能力，获取 `TTS_APP_ID` 和 `TTS_ACCESS_TOKEN`。
-2. 在[对象存储 TOS 控制台](https://console.volcengine.com/tos)创建存储桶（地域选 `cn-beijing`，设为**公共读**），填入 `TOS_BUCKET`。TOS 的 AK/SK 直接复用 `JIMENG_API_KEY` / `JIMENG_API_SECRET`（同一火山引擎账号）。
+2. 在[对象存储 TOS 控制台](https://console.volcengine.com/tos)创建存储桶（地域选 `cn-beijing`，设为**公共读**），填入 `TOS_BUCKET`。TOS 的 AK/SK 直接复用 `JIMENG_Access_Key_ID` / `JIMENG_SECRET_Acess_Key`（同一火山引擎账号）。
 
 **CLI 引擎前置步骤（仅 `cli` 模式需要）：**
 ```bash
@@ -167,9 +199,10 @@ python main.py
 ```text
 ├── config.py              # 统一的配置中心（API Key、路径、参数脱敏管理）
 ├── prompts_config.py      # 统一提示词管理模块（V2新增，集中管理所有LLM提示词）
-├── interactive.py         # 统一交互确认模块（V2新增，处理CLI与UI人工干预）
+├── interactive.py         # 统一交互确认模块（处理CLI人工干预）
 ├── main.py                # 命令行执行入口
-├── app.py                 # 图形界面入口（预留）
+├── api_server.py          # 内部工具 REST API 入口
+├── task_manager.py        # API 后台任务管理
 ├── workflow.py            # 工作流主控制器
 └── nodes/                 # 各个执行节点逻辑
     ├── story_maker.py
@@ -238,56 +271,51 @@ workflow.run(**PRODUCT_INPUT, run_id="20260513_120000")
 
 ## 主要配置项速查
 
-```python
-# config.py
+```env
+# .env
 
 # ── 视频引擎 ──────────────────────────────────────────────
-VIDEO_ENGINE = "omni"          # "omni"（推荐）/ "api" / "cli"
+VIDEO_ENGINE=omni
 
 # ── 千问 LLM ──────────────────────────────────────────────
-QWEN_API_KEY  = "..."
-QWEN_MODEL    = "qwen-plus"    # 可换 qwen-max / qwen-turbo
+QWEN_API_KEY=YOUR_QWEN_API_KEY_HERE
+QWEN_MODEL=qwen-plus
 
 # ── 即梦 / 火山引擎视觉 API ───────────────────────────────
-JIMENG_API_KEY    = "..."      # 火山引擎 Access Key ID
-JIMENG_API_SECRET = "..."      # 火山引擎 Secret Access Key
+JIMENG_Access_Key_ID=YOUR_JIMENG_ACCESS_KEY_ID_HERE
+JIMENG_SECRET_Acess_Key=YOUR_JIMENG_SECRET_ACCESS_KEY_HERE
 
 # ── 火山引擎 TTS（大模型语音合成）────────────────────────
-TTS_APP_ID       = "..."       # 语音技术控制台应用的 APP ID
-TTS_ACCESS_TOKEN = "..."       # 语音技术控制台应用的 Access Token
-TTS_CLUSTER      = "volcano_tts"
-TTS_DEFAULT_VOICE = "BV700_V2_streaming"  # 灿灿2.0（默认音色）
+TTS_APP_ID=YOUR_TTS_APP_ID_HERE
+TTS_ACCESS_TOKEN=YOUR_TTS_ACCESS_TOKEN_HERE
+TTS_CLUSTER=volcano_tts
+TTS_DEFAULT_VOICE=BV700_V2_streaming
 
 # ── 火山引擎 TOS（对象存储，omni 模式上传音频用）─────────
-TOS_REGION   = "cn-beijing"
-TOS_BUCKET   = "your-bucket"   # 需设为公共读
-TOS_ENDPOINT = "tos-cn-beijing.volces.com"
+TOS_REGION=cn-beijing
+TOS_BUCKET=YOUR_TOS_BUCKET_NAME_HERE
+TOS_ENDPOINT=tos-cn-beijing.volces.com
 
 # ── OmniHuman1.5 参数（仅 omni 模式）─────────────────────
-OMNI_VIDEO_MODEL       = "jimeng_realman_avatar_picture_omni_v15"
-OMNI_OUTPUT_RESOLUTION = 1080  # 可选 720 / 1080
-OMNI_FAST_MODE         = False
+OMNI_VIDEO_MODEL=jimeng_realman_avatar_picture_omni_v15
+OMNI_OUTPUT_RESOLUTION=1080
+OMNI_FAST_MODE=false
 
 # ── 视频时长限制（api / cli 模式）────────────────────────
-SCENE_MIN_DURATION = 5         # 即梦API仅支持 5s / 10s
-SCENE_MAX_DURATION = 10
+SCENE_MIN_DURATION=5
+SCENE_MAX_DURATION=10
 
 # ── 模卡图剪影路径 ────────────────────────────────────────
-MODELCARD_SILHOUETTE_PATHS = [
-    r"姿势图1路径",
-    r"姿势图2路径",
-    r"姿势图3路径",
-]
+MODELCARD_SILHOUETTE_PATHS=YOUR_PATH_TO_SILHOUETTE_1;YOUR_PATH_TO_SILHOUETTE_2;YOUR_PATH_TO_SILHOUETTE_3
 
 # ── 输出目录 ──────────────────────────────────────────────
-OUTPUT_DIR = r"输出目录绝对路径"
+OUTPUT_DIR=YOUR_OUTPUT_DIRECTORY_PATH_HERE
 ```
 
 ---
 
 ## 后续扩展规划
 
-- [ ] 图形化界面（Web UI）
 - [ ] 多人物/多图片生成与筛选
 - [ ] 双人对话/剧情脚本类型
 - [ ] 自动视频剪辑拼接（FFmpeg）
