@@ -61,12 +61,15 @@
 ## 当前版本主要特性
 
 - **后端工作流独立运行**：以 `workflow.py` 为主控制器，`main.py` 为命令行入口，不依赖 Web 前端即可完成完整生成链路。
+- **内部工具 Web 层**：新增 FastAPI + React/Vite 前端，支持创建任务、轮询状态、查看产物、处理 Checkpoint。
+- **异步任务管理**：API 层通过后台线程执行工作流，前端不直接调用 `workflow.run()`。
 - **多节点 AIGC 编排**：串联人物小传、视觉特征、人物图、口播脚本、TTS、视频生成和模卡图生成节点。
 - **交互式 Checkpoints**：
     - **生图确认**：查看人物图，支持修改提示词重绘。
     - **脚本微调**：进入视频生成前确认或调整分镜台词。
     - **首帧分配**：Omni 模式下为每段分镜指定图片序号或公网 URL。
 - **断点续跑**：每个关键步骤写入 `state.json`，重复运行同一 `run_id` 时自动跳过已完成节点。
+- **配置脱敏**：真实密钥只放在本地 `.env`，前端配置页只展示状态，不展示 Key、Secret 或 Token 明文。
 
 ---
 
@@ -77,47 +80,7 @@
 pip install -r requirements.txt
 ```
 
-### 2. 启动命令行工作流
-```bash
-python main.py
-```
-
-### 2.1 启动内部工具 API
-```bash
-uvicorn api_server:app --host 127.0.0.1 --port 8000
-```
-API 采用异步任务模式，前端通过 `/api/runs` 创建任务、轮询状态，并在 Checkpoint 处提交确认结果。
-
-### 2.2 启动内部工具前端
-```bash
-cd frontend
-npm install
-npm run dev
-```
-前端默认运行在 `http://127.0.0.1:5173`，并通过 Vite proxy 将 `/api` 转发到 `http://127.0.0.1:8000`。
-
-### 2.3 一键启动内部工具
-
-Windows PowerShell：
-
-```powershell
-.\scripts\start_dev.ps1
-```
-
-首次安装或需要重装前端依赖时：
-
-```powershell
-.\scripts\start_dev.ps1 -InstallDeps
-```
-
-一键脚本会同时启动：
-
-- 后端 API：`http://127.0.0.1:8000`
-- 前端页面：`http://127.0.0.1:5173`
-
-配置状态检测规划见 `docs/config_status_plan.md`。第一版建议只检测 Key 是否已配置，不在前端展示明文 Key。
-
-### 3. 配置 API Key 及路径
+### 2. 配置 API Key 及路径
 不要把真实 API Key 写进 `config.py`。本项目从 `.env` 读取本地配置，仓库只保留 `.env.example` 模板。
 
 | 配置项 | 说明 | 获取地址 |
@@ -138,7 +101,7 @@ Windows PowerShell：
 3. 将 `TOS_BUCKET` 改成真实桶名，并确认桶为公共读或可生成公网可访问 URL。
 4. 将 `OUTPUT_DIR` 改成本机可写的输出目录。
 5. 将 `MODELCARD_SILHOUETTE_PATHS` 改成 3 张本地剪影图的绝对路径，用英文分号 `;` 分隔。
-6. 重启后端 API 服务，再刷新前端配置页查看状态。
+6. 回到前端配置页点击“刷新配置”；如仍未生效，再重启后端 API 服务。
 
 **模特模卡图剪影配置示例：**
 ```env
@@ -170,40 +133,95 @@ dreamina login
 # 3. 登录成功后，再运行工作流，后续无需重复扫码
 ```
 
-### 4. 填写产品信息
+### 4. 启动内部工具
 
-编辑 `main.py` 中的 `PRODUCT_INPUT`：
+Windows PowerShell：
+
+```powershell
+.\scripts\start_dev.ps1
+```
+
+首次安装或需要重装前端依赖时：
+
+```powershell
+.\scripts\start_dev.ps1 -InstallDeps
+```
+
+一键脚本会同时启动：
+
+- 后端 API：`http://127.0.0.1:8000`
+- 前端页面：`http://127.0.0.1:5173`
+
+也可以分别启动：
+
+```bash
+uvicorn api_server:app --host 127.0.0.1 --port 8000
+```
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+API 采用异步任务模式，前端通过 `/api/runs` 创建任务、轮询状态，并在 Checkpoint 处提交确认结果。
+
+### 5. 使用内部工具创建任务
+
+打开 `http://127.0.0.1:5173` 后：
+
+1. 在“配置状态”页确认关键配置均已完成。
+2. 在“新建任务”页输入产品名称、卖点、目标受众、痛点和视频时长。
+3. 在“任务详情”页按步骤查看产物，并在 Checkpoint 处确认图片、脚本和首帧分配。
+
+### 6. 命令行工作流
+
+如果只想使用 CLI，可编辑 `main.py` 中的 `PRODUCT_INPUT`：
+
 ```python
 PRODUCT_INPUT = {
     "product_name": "你的产品名",
     "product_offer": "产品功能/卖点",
     "target_audience": "目标用户描述",
     "pain_points": "核心痛点",
-    "total_duration": 30,  # 视频总时长（秒）
+    "total_duration": 30,
 }
 ```
 
-### 5. 运行与续跑
-```bash
-# 启动全新任务
-python main.py
+然后运行：
 
-# 启动旧任务
-#main.py 中修改run_id="xxxx"
+```bash
+python main.py
 ```
+
+### 7. 续跑
+
+API 模式可在新建任务时传入旧 `run_id`。CLI 模式可在代码中调用：
+
+```python
+workflow.run(**PRODUCT_INPUT, run_id="20260513_120000")
+```
+
+已完成步骤会从 `state.json` 读取并跳过。
 
 ---
 
 ## 核心文件结构
 
 ```text
-├── config.py              # 统一的配置中心（API Key、路径、参数脱敏管理）
-├── prompts_config.py      # 统一提示词管理模块（V2新增，集中管理所有LLM提示词）
-├── interactive.py         # 统一交互确认模块（处理CLI人工干预）
+├── config.py              # 统一配置入口，从 .env 读取本地密钥与路径
+├── .env.example           # 本地配置模板，不包含真实密钥
+├── prompts_config.py      # 统一提示词管理模块
+├── interactive.py         # 统一交互确认模块，支持 CLI / API backend
 ├── main.py                # 命令行执行入口
 ├── api_server.py          # 内部工具 REST API 入口
+├── api_backend.py         # API Checkpoint 后端
 ├── task_manager.py        # API 后台任务管理
 ├── workflow.py            # 工作流主控制器
+├── clients/               # LLM / 即梦等外部服务客户端封装
+├── utils/                 # JSON、文件、签名等工具函数
+├── frontend/              # React + Vite 内部工具前端
+├── scripts/               # 本地开发启动脚本
 └── nodes/                 # 各个执行节点逻辑
     ├── story_maker.py
     ├── key_feature_extractor.py
@@ -248,7 +266,7 @@ workflow.run(**PRODUCT_INPUT, run_id="20260513_120000")
 
 各步骤独立判断缓存状态，已完成的步骤自动跳过，节省时间与费用。
 
-> **自动检测失效保护（V2新增）**：若在 Omni 模式下由于网络问题或 `image_url` 为空导致数字人生成失败，系统会自动重置对应的检查点（Checkpoint 3），重新运行后会暂停并提示你手动输入缺失的公网 HTTPS 图片链接，补全后即可直接进入视频生成，无需重头跑。
+> **自动检测失效保护**：若在 Omni 模式下由于网络问题或 `image_url` 为空导致数字人生成失败，系统会自动重置对应的检查点（Checkpoint 3），重新运行后会暂停并提示你手动输入缺失的公网 HTTPS 图片链接，补全后即可直接进入视频生成，无需重头跑。
 
 ---
 
